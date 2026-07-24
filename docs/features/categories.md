@@ -46,10 +46,11 @@ Layout de página con lista agrupada por tipo ERP:
 | `GATEWAY_FEE` | `COGS` | Comisiones de pasarela auto-liquidadas en traslados card/transfer |
 | `PAYROLL_ADVANCE` | `COGS` | Gastos auto-generados al registrar adelantos de nómina |
 | `PAY_SALARIES` | `COGS` | Gastos auto-generados al pagar nómina |
+| `MARKETING` | `OPEX Variable` | **No** auto-genera gastos: clasifica la categoría de marketing/publicidad como la **única base del "Marketing Spend" y el CAC** del dashboard. Ver `nubelsaas/docs/business_rules/dashboard_rules.md §5.1`. |
 
-Los tres deben ser `type = COGS`. Ver `expenses_rules.md §13` y `dashboard_rules.md §4` para el razonamiento.
+Los tres primeros (`GATEWAY_FEE`, `PAYROLL_ADVANCE`, `PAY_SALARIES`) deben ser `type = COGS` porque auto-generan gastos. `MARKETING` es distinto: no auto-genera nada, solo etiqueta la categoría de marketing (típicamente `type = OPEX Variable`) para que el CAC sume **solo** ese gasto y no todo el OPEX Variable. Ver `expenses_rules.md §13` y `dashboard_rules.md §4/§5.1` para el razonamiento.
 
-Un código solo puede estar asignado a una categoría (índice único en BD). El dropdown deshabilita códigos ya asignados.
+Un código solo puede estar asignado a una categoría (índice único en BD, solo para globales `tenant_id IS NULL`). El dropdown deshabilita códigos ya asignados.
 
 ---
 

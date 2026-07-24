@@ -16,6 +16,7 @@ const SYSTEM_CODES = [
   { code: 'GATEWAY_FEE',     label: 'GATEWAY_FEE',     desc: 'Comisiones de pasarela de pago (auto-liquidadas)' },
   { code: 'PAYROLL_ADVANCE', label: 'PAYROLL_ADVANCE',  desc: 'Anticipos de nómina en efectivo'                  },
   { code: 'PAY_SALARIES',    label: 'PAY_SALARIES',     desc: 'Pago de nómina al marcar periodo como pagado'      },
+  { code: 'MARKETING',       label: 'MARKETING',        desc: 'Inversión en marketing/publicidad — única base del CAC (no auto-genera gastos)' },
 ];
 
 const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white';
@@ -217,7 +218,7 @@ export default function CategoriesPage() {
             ))}
           </div>
           <p className="text-[11px] text-slate-400">
-            Each code can be assigned to only one category. The system uses these codes to auto-create expense records — unassigned codes are silently skipped.
+            Each code can be assigned to only one category. The COGS codes (GATEWAY_FEE, PAYROLL_ADVANCE, PAY_SALARIES) auto-create expense records; MARKETING only classifies the marketing spend for the CAC metric. Unassigned codes are silently skipped.
           </p>
         </div>
       </div>
