@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   });
 }
 
-const PATCHABLE_FIELDS = new Set(['name', 'admin_email', 'phone', 'city', 'plan_id', 'feature_overrides', 'logo_url', 'settings', 'currency_code', 'timezone', 'is_audit_enabled']);
+const PATCHABLE_FIELDS = new Set(['name', 'admin_email', 'phone', 'city', 'country_iso', 'phone_prefix', 'plan_id', 'feature_overrides', 'logo_url', 'settings', 'currency_code', 'timezone', 'is_audit_enabled']);
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

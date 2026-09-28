@@ -95,12 +95,27 @@ Permite subir, reemplazar o eliminar el logo del tenant. El upload llama `POST /
 | Phone | `phone` |
 | City | `city` |
 | Subscription plan | `plan_id` |
+| Country | `country_iso` |
+| Currency | `currency_code` — derivada del país, `readOnly` en la UI |
+| Timezone | `timezone` — derivada del país, `readOnly` en la UI |
+| Phone prefix | `phone_prefix` — derivado del país, `readOnly` en la UI |
 
 Todos vía `PATCH /api/tenants/[id]` (service role).
+
+> **Este panel es la ÚNICA superficie de la configuración regional del tenant.** País, moneda, zona
+> horaria y prefijo telefónico definen la constitución del tenant (cambiar la moneda de un salón con
+> ventas históricas corrompe los importes ya registrados; la zona horaria mueve el corte de día de
+> toda la contabilidad), así que no se editan desde el app del salón. Al elegir el país, los otros
+> tres se derivan de `COUNTRY_DEFAULTS` y viajan juntos en el mismo PATCH — si se agrega un país
+> nuevo hay que darle las cuatro claves. Ver `nubelsaas/docs/plans/20260922_settings_region_a_nubel_admin_plan.md`.
 
 ### Quick links
 
 Botones de acceso rápido a: Feature Flags, Impersonate, Clone, Audit log, Open app.
+
+### Public booking page
+
+Tarjeta con el URL público de reservas del salón: `${NEXT_PUBLIC_MAIN_APP_URL}/book/[tenant_id]` (portal servido por el app principal). Botones de **copiar** y **abrir** en nueva pestaña. Un badge indica si el portal está **Enabled** / **Not enabled** según `feature_overrides.publicAllowedServices` (mismo gate que la RPC `get_public_booking_config` del app: si está vacío, el enlace muestra "Salón no encontrado"). Útil para compartir el enlace de agendamiento con el salón.
 
 ---
 

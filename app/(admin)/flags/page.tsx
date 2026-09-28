@@ -24,6 +24,18 @@ const BOOL_FLAGS: BoolFlag[] = [
   { key: 'enableScheduler',            label: 'Scheduler (Agenda)',          description: 'Calendar view for managing appointments and block times', defaultOn: false },
 ];
 
+// Canales del recordatorio de citas al cliente. Flag ANIDADO en
+// feature_overrides.clientReminders = { email, whatsapp, sms }.
+// Fase 1: solo Email es activable (default ON); WhatsApp/SMS se muestran
+// bloqueados (irán en planes independientes).
+type ReminderChannel = { key: string; label: string; description: string; defaultOn: boolean; locked: boolean };
+
+const REMINDER_CHANNELS: ReminderChannel[] = [
+  { key: 'email',    label: 'Email',    description: 'Appointment reminder + confirmation by email',   defaultOn: true,  locked: false },
+  { key: 'whatsapp', label: 'WhatsApp', description: 'Coming soon — separate plan',                    defaultOn: false, locked: true  },
+  { key: 'sms',      label: 'SMS',      description: 'Requires a provider (Twilio, etc.) — later',     defaultOn: false, locked: true  },
+];
+
 export default function FlagsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
@@ -62,6 +74,22 @@ export default function FlagsPage() {
 
   function toggleFlag(key: string, defaultOn: boolean) {
     setFlags(prev => ({ ...prev, [key]: !getFlagValue(key, defaultOn) }));
+  }
+
+  // Flag anidado feature_overrides.clientReminders.{channel}
+  function getReminderChannel(channel: string, defaultOn: boolean): boolean {
+    const cr = (flags.clientReminders ?? {}) as Record<string, unknown>;
+    if (channel in cr) return Boolean(cr[channel]);
+    return defaultOn;
+  }
+
+  function toggleReminderChannel(channel: string, defaultOn: boolean) {
+    setFlags(prev => {
+      const cr = { ...((prev.clientReminders ?? {}) as Record<string, unknown>) };
+      const current = channel in cr ? Boolean(cr[channel]) : defaultOn;
+      cr[channel] = !current;
+      return { ...prev, clientReminders: cr };
+    });
   }
 
   async function handleSave() {
@@ -134,6 +162,37 @@ export default function FlagsPage() {
                           <p className="text-[10px] font-mono text-slate-300 mt-0.5">{key}</p>
                         </div>
                         <button type="button" onClick={() => toggleFlag(key, defaultOn)} className={on ? 'text-indigo-500' : 'text-slate-300'}>
+                          {on ? <ToggleRight size={30} /> : <ToggleLeft size={30} />}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Client Reminders (flag anidado por canal) */}
+              <div>
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">Client Reminders</p>
+                <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+                  {REMINDER_CHANNELS.map(({ key, label, description, defaultOn, locked }) => {
+                    const on = getReminderChannel(key, defaultOn);
+                    return (
+                      <div key={key} className="flex items-center gap-4 px-5 py-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                            {label}
+                            {locked && (
+                              <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                                Blocked
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">{description}</p>
+                          <p className="text-[10px] font-mono text-slate-300 mt-0.5">clientReminders.{key}</p>
+                        </div>
+                        <button type="button" disabled={locked}
+                          onClick={() => !locked && toggleReminderChannel(key, defaultOn)}
+                          className={locked ? 'text-slate-200 cursor-not-allowed' : on ? 'text-indigo-500' : 'text-slate-300'}>
                           {on ? <ToggleRight size={30} /> : <ToggleLeft size={30} />}
                         </button>
                       </div>

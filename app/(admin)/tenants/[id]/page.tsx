@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound } from 'lucide-react';
+import { ArrowLeft, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AdminHeader from '@/components/layout/AdminHeader';
@@ -9,7 +9,7 @@ import AdminHeader from '@/components/layout/AdminHeader';
 type Tenant = {
   id: string; name: string; admin_email: string | null;
   phone: string | null; city: string | null; country_iso: string | null;
-  currency_code: string | null; timezone: string | null;
+  currency_code: string | null; timezone: string | null; phone_prefix: string | null;
   plan_id: string | null; logo_url: string | null;
   feature_overrides: Record<string, unknown> | null;
   settings: Record<string, unknown> | null;
@@ -17,6 +17,23 @@ type Tenant = {
 };
 type TenantStats = { activeUsers: number; branches: number; lastSale: string | null; customers: number };
 type Plan = { id: string; name: string; monthly_price: number };
+
+const COUNTRY_DEFAULTS: Record<string, { currency: string; timezone: string; prefix: string }> = {
+  CO: { currency: 'COP', timezone: 'America/Bogota', prefix: '+57' },
+  MX: { currency: 'MXN', timezone: 'America/Mexico_City', prefix: '+52' },
+  CL: { currency: 'CLP', timezone: 'America/Santiago', prefix: '+56' },
+  ES: { currency: 'EUR', timezone: 'Europe/Madrid', prefix: '+34' },
+  AR: { currency: 'ARS', timezone: 'America/Argentina/Buenos_Aires', prefix: '+54' },
+  PE: { currency: 'PEN', timezone: 'America/Lima', prefix: '+51' },
+  EC: { currency: 'USD', timezone: 'America/Guayaquil', prefix: '+593' },
+  CR: { currency: 'CRC', timezone: 'America/Costa_Rica', prefix: '+506' },
+  DO: { currency: 'DOP', timezone: 'America/Santo_Domingo', prefix: '+1' },
+  GT: { currency: 'GTQ', timezone: 'America/Guatemala', prefix: '+502' },
+  PA: { currency: 'PAB', timezone: 'America/Panama', prefix: '+507' },
+  VE: { currency: 'VES', timezone: 'America/Caracas', prefix: '+58' },
+  BO: { currency: 'BOB', timezone: 'America/La_Paz', prefix: '+591' },
+  PR: { currency: 'USD', timezone: 'America/Puerto_Rico', prefix: '+1' },
+};
 
 const inputCls = 'w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500';
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1';
@@ -36,12 +53,15 @@ export default function TenantDetailPage() {
   const [logoUrl,       setLogoUrl]       = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoError,     setLogoError]     = useState<string | null>(null);
+  const [copiedBooking, setCopiedBooking] = useState(false);
 
   // Editable fields
   const [email,    setEmail]    = useState('');
   const [planId,   setPlanId]   = useState('');
   const [currency, setCurrency] = useState('');
   const [timezone, setTimezone] = useState('');
+  const [country,  setCountry]  = useState('');
+  const [phonePrefix, setPhonePrefix] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -58,6 +78,8 @@ export default function TenantDetailPage() {
         setPlanId(t.plan_id ?? '');
         setCurrency(t.currency_code ?? '');
         setTimezone(t.timezone ?? '');
+        setCountry(t.country_iso ?? 'CO');
+        setPhonePrefix(t.phone_prefix ?? '');
         setLogoUrl(t.logo_url ?? null);
         setStats(detail.stats);
       }
@@ -66,6 +88,16 @@ export default function TenantDetailPage() {
     }
     load();
   }, [id]);
+
+  function handleCountryChange(isoCode: string) {
+    setCountry(isoCode);
+    const defaults = COUNTRY_DEFAULTS[isoCode];
+    if (defaults) {
+      setCurrency(defaults.currency);
+      setTimezone(defaults.timezone);
+      setPhonePrefix(defaults.prefix);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -79,6 +111,8 @@ export default function TenantDetailPage() {
         plan_id:       planId   || null,
         currency_code: currency || null,
         timezone:      timezone || null,
+        country_iso:   country  || null,
+        phone_prefix:  phonePrefix || null,
       }),
     });
     const json = await res.json();
@@ -124,10 +158,26 @@ export default function TenantDetailPage() {
     if (res.ok) setLogoUrl(null);
   }
 
+  async function handleCopyBooking(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedBooking(true);
+      setTimeout(() => setCopiedBooking(false), 2000);
+    } catch { /* clipboard unavailable — the input is still selectable */ }
+  }
+
   if (loading) return <><AdminHeader title="Tenant" /><div className="p-8 text-sm text-slate-500">Loading...</div></>;
   if (!tenant) return <><AdminHeader title="Tenant" /><div className="p-8 text-sm text-slate-500">Tenant not found</div></>;
 
   const currentPlan = plans.find(p => p.id === planId);
+
+  // Public booking portal (served by the main app at /book/[tenant_id]).
+  const bookingBase = process.env.NEXT_PUBLIC_MAIN_APP_URL ?? 'https://app.nubel.tech';
+  const bookingUrl  = `${bookingBase.replace(/\/$/, '')}/book/${tenant.id}`;
+  // Enabled only when the salon has published services — same gate the portal RPC
+  // uses (feature_overrides.publicAllowedServices). Otherwise the link 404s.
+  const publicServices = (tenant.feature_overrides as { publicAllowedServices?: unknown } | null)?.publicAllowedServices;
+  const bookingEnabled = Array.isArray(publicServices) && publicServices.length > 0;
 
   return (
     <>
@@ -176,6 +226,50 @@ export default function TenantDetailPage() {
             className="flex items-center gap-1.5 text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">
             <ExternalLink size={12} /> Open app
           </a>
+        </div>
+
+        {/* Public booking link — the salon's shareable /book portal URL */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-black text-slate-700 flex items-center gap-2">
+              <CalendarCheck size={15} className="text-slate-400" /> Public booking page
+            </p>
+            {bookingEnabled ? (
+              <span className="text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 px-2 py-0.5">Enabled</span>
+            ) : (
+              <span className="text-[10px] font-bold rounded-full bg-slate-100 text-slate-400 px-2 py-0.5">Not enabled</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={bookingUrl}
+              onFocus={e => e.target.select()}
+              className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-600 truncate"
+            />
+            <button
+              type="button"
+              onClick={() => handleCopyBooking(bookingUrl)}
+              title="Copy URL"
+              className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors flex-shrink-0"
+            >
+              {copiedBooking ? <><Check size={12} className="text-emerald-500" /> Copied</> : <><Copy size={12} /> Copy</>}
+            </button>
+            <a
+              href={bookingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open booking page"
+              className="flex items-center rounded-xl border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-50 transition-colors flex-shrink-0"
+            >
+              <ExternalLink size={12} />
+            </a>
+          </div>
+          {!bookingEnabled && (
+            <p className="text-[11px] text-slate-400">
+              El salón aún no habilitó su agenda pública (no hay servicios publicables). El enlace mostrará “Salón no encontrado” hasta que active servicios en el app.
+            </p>
+          )}
         </div>
 
         {/* Logo */}
@@ -248,16 +342,40 @@ export default function TenantDetailPage() {
                 placeholder="admin@empresa.com" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={labelCls}>Country (ISO)</label>
+                <select value={country} onChange={e => handleCountryChange(e.target.value)} className={inputCls}>
+                  <option value="CO">🇨🇴 Colombia (CO)</option>
+                  <option value="MX">🇲🇽 México (MX)</option>
+                  <option value="CL">🇨🇱 Chile (CL)</option>
+                  <option value="ES">🇪🇸 España (ES)</option>
+                  <option value="AR">🇦🇷 Argentina (AR)</option>
+                  <option value="PE">🇵🇪 Perú (PE)</option>
+                  <option value="EC">🇪🇨 Ecuador (EC)</option>
+                  <option value="CR">🇨🇷 Costa Rica (CR)</option>
+                  <option value="DO">🇩🇴 Rep. Dominicana (DO)</option>
+                  <option value="GT">🇬🇹 Guatemala (GT)</option>
+                  <option value="PA">🇵🇦 Panamá (PA)</option>
+                  <option value="VE">🇻🇪 Venezuela (VE)</option>
+                  <option value="BO">🇧🇴 Bolivia (BO)</option>
+                  <option value="PR">🇵🇷 Puerto Rico (PR)</option>
+                </select>
+              </div>
               <div>
                 <label className={labelCls}>Currency</label>
-                <input type="text" value={currency} onChange={e => setCurrency(e.target.value)}
-                  className={inputCls} placeholder="COP" maxLength={3} />
+                <input type="text" value={currency} readOnly
+                  className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} placeholder="COP" />
               </div>
               <div>
                 <label className={labelCls}>Timezone</label>
-                <input type="text" value={timezone} onChange={e => setTimezone(e.target.value)}
-                  className={inputCls} placeholder="America/Bogota" />
+                <input type="text" value={timezone} readOnly
+                  className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} placeholder="America/Bogota" />
+              </div>
+              <div>
+                <label className={labelCls}>Phone prefix</label>
+                <input type="text" value={phonePrefix} readOnly
+                  className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} placeholder="+57" />
               </div>
             </div>
 
