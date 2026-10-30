@@ -10,6 +10,7 @@ docs/
 │   ├── clone.md       ← Onboarding + Demo Seed (leer antes de tocar clone)
 │   ├── flags.md
 │   ├── impersonate.md
+│   ├── entornos.md    ← PROD vs DEV (leer antes de correr el portal)
 │   └── import.md      ← Pendiente de implementar
 ├── walkthroughs/
 │   └── 20260529_admin_portal_v1.md
@@ -17,8 +18,21 @@ docs/
     └── admin_portal_sprints.md  ← Estado de sprints + pendientes
 ```
 
+## Entornos — PROD y DEV (leer siempre)
+
+El portal escribe en la base que indique el comando de arranque (`docs/features/entornos.md`):
+
+| Comando | Variables | Base | URL local |
+|---|---|---|---|
+| `npm run dev` | `.env.local` | **PROD** | http://localhost:3002 |
+| `npm run dev:dev` | `.env.dev.local` | **DEV** | http://localhost:3003 |
+
+- La franja superior (`EnvBanner`) muestra siempre el entorno y la referencia del proyecto Supabase. **Antes de cualquier escritura, confirmar en qué base se está.**
+- Para probar cambios, usar **DEV** (`npm run dev:dev`). PROD solo cuando el usuario lo pida.
+- Las ramas `main` y `dev` organizan el código; no cambian la base.
+
 ## Stack
-Next.js 14 (App Router) · TypeScript · Supabase (mismo proyecto que nubelsaas) · Tailwind CSS · Zustand · lucide-react
+Next.js 14 (App Router) · TypeScript · Supabase (mismo proyecto que nubelsaas; PROD o DEV según el comando) · Tailwind CSS · Zustand · lucide-react
 
 ## Convención de nombres de tablas
 
@@ -89,3 +103,5 @@ Rutas ya creadas:
 | `SUPABASE_SERVICE_ROLE_KEY` | Solo rutas API server-side |
 | `MAIN_APP_URL` | Redirect post-impersonación (server-side) |
 | `NEXT_PUBLIC_MAIN_APP_URL` | Links al app principal en UI |
+| `NEXT_PUBLIC_NUBEL_ENV` | `prod` / `dev` — franja de entorno y título de la pestaña |
+| `NEXT_DIST_DIR` | Solo DEV (`.next-dev`): carpeta de build propia |

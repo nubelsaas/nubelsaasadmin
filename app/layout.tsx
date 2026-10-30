@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import EnvBanner from "@/components/shared/EnvBanner";
+import { getNubelEnv } from "@/lib/environment";
+
+const { env } = getNubelEnv();
 
 export const metadata: Metadata = {
-  title: "Nubel Admin",
+  // En DEV la pestaña del navegador lo dice, para no confundir dos pestañas abiertas.
+  title: env === 'dev' ? "[DEV] Nubel Admin" : "Nubel Admin",
   description: "Nubel administration portal",
   icons: { icon: '/icon.svg' },
 };
@@ -10,7 +15,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <EnvBanner />
+        {children}
+      </body>
     </html>
   );
 }
