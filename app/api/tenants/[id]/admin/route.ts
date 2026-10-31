@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
 import { createAdminUserForTenant } from '@/lib/createAdminUser';
+import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { email, first_name, last_name, admin_name, password, require_new } = await req.json();
   if (!email) return NextResponse.json({ error: 'email is required' }, { status: 400 });
@@ -27,6 +29,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   });
 
   if (hasAdmin) return NextResponse.json({ error: 'This tenant already has an admin user' }, { status: 409 });
+
+  const logged = await logAdminAction(session, 'tenant.admin_create', {
+    tenantId: params.id,
+    details: { email, mode: password ? 'manual' : 'invite' },
+  });
+  if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
   const resolvedName = admin_name || [first_name, last_name].filter(Boolean).join(' ');
 

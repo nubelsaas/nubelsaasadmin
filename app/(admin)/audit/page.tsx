@@ -16,11 +16,21 @@ type AuditRow = {
   timestamp: string;
   tenants?: { name: string } | null;
 };
+type AdminRow = {
+  id: string;
+  admin_email: string;
+  action: string;
+  tenant_id: string | null;
+  tenant_name: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+};
 
 const inputCls = 'rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white';
 
 function AuditContent() {
   const searchParams = useSearchParams();
+  const [view, setView] = useState<'tenant' | 'admin'>('tenant');
 
   // Filters
   const [tenantSearch,  setTenantSearch]  = useState('');
@@ -36,6 +46,7 @@ function AuditContent() {
 
   // Results
   const [rows,    setRows]    = useState<AuditRow[]>([]);
+  const [adminRows, setAdminRows] = useState<AdminRow[]>([]);
   const [total,   setTotal]   = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [loading, setLoading] = useState(false);
@@ -72,17 +83,18 @@ function AuditContent() {
     const params = new URLSearchParams({ page: String(page) });
     if (tenantFilter) params.set('tenantId', tenantFilter.id);
     if (actionFilter) params.set('action',   actionFilter);
-    if (tableFilter)  params.set('table',    tableFilter);
+    if (tableFilter && view === 'tenant') params.set('table', tableFilter);
     if (fromDate)     params.set('from',     fromDate);
     if (toDate)       params.set('to',       toDate);
 
-    const res = await fetch(`/api/audit?${params}`);
+    const res = await fetch(`/api/audit${view === 'admin' ? '/admin' : ''}?${params}`);
     const json = await res.json();
-    setRows(json.rows ?? []);
+    if (view === 'admin') setAdminRows(json.rows ?? []);
+    else setRows(json.rows ?? []);
     setTotal(json.total ?? 0);
     setPageSize(json.pageSize ?? 50);
     setLoading(false);
-  }, [page, tenantFilter, actionFilter, tableFilter, fromDate, toDate]);
+  }, [view, page, tenantFilter, actionFilter, tableFilter, fromDate, toDate]);
 
   useEffect(() => { loadAudit(); }, [loadAudit]);
 
@@ -110,6 +122,16 @@ function AuditContent() {
     <>
       <AdminHeader title="Audit Log" />
       <div className="p-4 md:p-6 space-y-4 h-full flex flex-col overflow-hidden">
+
+        {/* View */}
+        <div className="flex rounded-xl border border-slate-200 overflow-hidden text-sm bg-white flex-shrink-0 max-w-sm">
+          {(['tenant', 'admin'] as const).map(v => (
+            <button key={v} type="button" onClick={() => { setView(v); setPage(0); }}
+              className={`flex-1 py-2 font-medium transition-colors ${view === v ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+              {v === 'tenant' ? 'Tenant activity' : 'Admin actions'}
+            </button>
+          ))}
+        </div>
 
         {/* Filters */}
         <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 flex-shrink-0">
@@ -146,13 +168,15 @@ function AuditContent() {
               )}
             </div>
 
-            <input type="text" placeholder="Action (e.g. INSERT)" value={actionFilter}
+            <input type="text" placeholder={view === 'admin' ? 'Action (e.g. impersonate)' : 'Action (e.g. INSERT)'} value={actionFilter}
               onChange={e => { setActionFilter(e.target.value); setPage(0); }}
               className={inputCls} />
 
-            <input type="text" placeholder="Table name" value={tableFilter}
-              onChange={e => { setTableFilter(e.target.value); setPage(0); }}
-              className={inputCls} />
+            {view === 'tenant' && (
+              <input type="text" placeholder="Table name" value={tableFilter}
+                onChange={e => { setTableFilter(e.target.value); setPage(0); }}
+                className={inputCls} />
+            )}
 
             <div className="flex gap-2">
               <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(0); }}
@@ -167,8 +191,40 @@ function AuditContent() {
         <div className="flex-1 overflow-auto bg-white rounded-2xl border border-slate-200">
           {loading ? (
             <div className="flex items-center justify-center h-48 text-sm text-slate-400">Loading…</div>
-          ) : rows.length === 0 ? (
+          ) : (view === 'admin' ? adminRows : rows).length === 0 ? (
             <div className="flex items-center justify-center h-48 text-sm text-slate-400">No records found</div>
+          ) : view === 'admin' ? (
+            <table className="w-full text-xs min-w-max">
+              <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
+                <tr>
+                  {['Timestamp', 'Admin', 'Action', 'Tenant', 'Details'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-black text-slate-500 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {adminRows.map(row => {
+                  const details = JSON.stringify(row.details);
+                  return (
+                    <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap font-mono">{fmtTime(row.created_at)}</td>
+                      <td className="px-4 py-2.5 text-slate-700">{row.admin_email}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">{row.action}</span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {row.tenant_name ? (
+                          <a href={`/tenants/${row.tenant_id}`} className="font-medium text-indigo-600 hover:underline">{row.tenant_name}</a>
+                        ) : row.tenant_id ? (
+                          <span className="font-mono text-slate-400">{row.tenant_id.slice(0, 8)}…</span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-slate-400 max-w-md truncate" title={details}>{details}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           ) : (
             <table className="w-full text-xs min-w-max">
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">

@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
+import { findTargetData } from '@/lib/cloneTarget';
+import { createUndoToken, verifyUndoToken } from '@/lib/cloneUndoToken';
+import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
@@ -40,7 +43,7 @@ const ROLLBACK_ORDER = [
   'appointments', 'stylist_blocks',
   'cash_register_shifts', 'customers',
   'service_recipes', 'branch_stock',
-  'products_services', 'commission_rules', 'users',
+  'products_services', 'commission_rules', 'payment_accounts', 'users',
   'branches', 'roles', 'product_categories', 'distributors',
 ];
 
@@ -467,10 +470,11 @@ async function rollback(
   targetId: string,
   db: ReturnType<typeof createAdminClient>,
   send: (m: string) => void,
-) {
+): Promise<boolean> {
   send('');
   send('⏪ Rolling back...');
   let total = 0;
+  const failed: string[] = [];
 
 
 
@@ -482,17 +486,23 @@ async function rollback(
   //
   // Fix: keep exactly ONE guardian row. Prefer the real admin (admin_email user that is
   // an active superadmin); otherwise keep any active superadmin so the delete never aborts.
-  const { data: tenant } = await db
+  const { data: tenant, error: tenantError } = await db
     .from('tenants')
     .select('admin_email')
     .eq('id', targetId)
     .single();
   const adminEmail: string | null = tenant?.admin_email ?? null;
 
-  const { data: tenantUsers } = await db
+  const { data: tenantUsers, error: usersError } = await db
     .from('users')
     .select('id, email, role_id, is_active, permissions')
     .eq('tenant_id', targetId);
+
+  // Sin estos datos no se sabe a qué admin conservar: borrar aquí podría llevarse al admin real.
+  if (tenantError || usersError) {
+    send(`❌ Rollback aborted: ${(tenantError ?? usersError)!.message}. Nothing was deleted.`);
+    return false;
+  }
 
   const isActiveSuperadmin = (u: { is_active?: boolean | null; permissions: unknown }) => {
     const perms = typeof u.permissions === 'string' ? JSON.parse(u.permissions) : (u.permissions ?? {});
@@ -518,10 +528,17 @@ async function rollback(
     if (table === 'roles' && keeperRoleId) {
       query = query.neq('id', keeperRoleId);
     }
-    const { count } = await query;
+    const { count, error } = await query;
+    if (error) { send(`❌ ${table}: ${error.message}`); failed.push(table); continue; }
     if (count) { send(`   ✓ ${table}: ${count} rows removed`); total += count; }
   }
+
+  if (failed.length) {
+    send(`❌ Rollback incomplete — ${failed.length} of ${ROLLBACK_ORDER.length} tables failed (${failed.join(', ')}). ${total} rows removed. Use "Undo clone" to retry.`);
+    return false;
+  }
   send(`↩️  Rollback complete — ${total} rows removed.${keeper ? ' One guardian user kept.' : ' Target tenant is empty again.'}`);
+  return true;
 }
 
 // ── Orchestrators ─────────────────────────────────────────────────────────────
@@ -591,18 +608,48 @@ async function runDemoSeedMode(
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
-export async function GET(req: NextRequest) {
-  if (!await assertSuperadmin()) return new Response('Forbidden', { status: 403 });
+// POST y no GET: este endpoint escribe y borra. Las cookies de sesión son SameSite=Lax, así que
+// un POST cross-site llega sin sesión, mientras que un GET se dispararía con solo abrir un link.
+export async function POST(req: NextRequest) {
+  const session = await assertSuperadmin();
+  if (!session) return new Response('Forbidden', { status: 403 });
 
-  const { searchParams } = new URL(req.url);
-  const source    = searchParams.get('source');
-  const target    = searchParams.get('target');
-  const mode      = searchParams.get('mode') as 'onboarding' | 'demo' | 'rollback' | null;
-  const copyStock = searchParams.get('copyStock') === '1';
-  const excluded  = new Set((searchParams.get('exclude') ?? '').split(',').filter(Boolean));
+  const body = await req.json().catch(() => null);
+  const { source, target, mode, undoToken } = (body ?? {}) as {
+    source?: string; target?: string; mode?: string; undoToken?: unknown;
+  };
+  const copyStock = body?.copyStock === true;
+  const excluded  = new Set(String(body?.exclude ?? '').split(',').filter(Boolean));
+  const secret    = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
   if (!target) return new Response('Missing target', { status: 400 });
-  if (!source && mode !== 'rollback') return new Response('Missing source', { status: 400 });
+  if (mode !== 'onboarding' && mode !== 'demo' && mode !== 'rollback') {
+    return new Response('Invalid mode', { status: 400 });
+  }
+
+  if (mode === 'rollback') {
+    if (!verifyUndoToken(undoToken, target, secret)) {
+      return new Response('Undo is only available for a recent clone from this page', { status: 403 });
+    }
+  } else {
+    if (!source) return new Response('Missing source', { status: 400 });
+
+    // Antes de abrir el stream: si el destino falla aquí, el rollback automático no debe correr.
+    try {
+      const offendingTables = await findTargetData(createAdminClient(), target);
+      if (offendingTables.length) {
+        return new Response(`Target tenant is not empty: ${offendingTables.join(', ')}`, { status: 409 });
+      }
+    } catch (e: unknown) {
+      return new Response(e instanceof Error ? e.message : String(e), { status: 500 });
+    }
+  }
+
+  const logged = await logAdminAction(session, `clone.${mode}`, {
+    tenantId: target,
+    details: { source: source ?? null, copyStock, exclude: Array.from(excluded) },
+  });
+  if (!logged) return new Response(AUDIT_FAILED, { status: 500 });
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -622,10 +669,17 @@ export async function GET(req: NextRequest) {
         } else {
           await runOnboardingMode(source!, target, copyStock, excluded, send);
         }
+        if (mode !== 'rollback') send(`undo-token:${createUndoToken(target, secret)}`);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         controller.enqueue(new TextEncoder().encode(`data: ❌ ${msg}\n\n`));
-        if (mode !== 'rollback') await rollback(target, createAdminClient(), send);
+        if (mode !== 'rollback') {
+          // Aquí el registro no bloquea: un clone a medias debe limpiarse igual.
+          await logAdminAction(session, 'clone.auto_rollback', { tenantId: target, details: { error: msg } });
+          const cleaned = await rollback(target, createAdminClient(), send);
+          // Un clone a medias queda con datos y el destino ya no pasa el chequeo: Undo es el reintento.
+          if (!cleaned) send(`undo-token:${createUndoToken(target, secret)}`);
+        }
       } finally {
         controller.close();
       }

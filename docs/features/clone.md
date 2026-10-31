@@ -39,9 +39,11 @@ Todos los modos usan **Server-Sent Events (SSE)**. La UI recibe cada línea en t
 ### Tablas copiadas (8)
 ```
 branches · roles · product_categories
-payment_accounts · commission_rules · products_services
+distributors · commission_rules · products_services
 service_recipes · branch_stock
 ```
+
+> **`payment_accounts` no se clona.** Onboarding deja al tenant sin cuentas de pago: hay que crearlas en el app principal antes de vender. Demo Seed crea una cuenta "Caja General" si no existe ninguna.
 
 > **`expense_categories` no se clona.** Desde 2026-06-18 las categorías de gastos son globales (`tenant_id IS NULL`) y todos los tenants las comparten via RLS. El tenant destino las hereda automáticamente sin necesidad de copiarlas.
 
@@ -74,8 +76,8 @@ Esto refleja la misma lógica con la que `check-target` ya excluye al **usuario*
 
 ### Orden de inserción (topológico)
 ```
-L0: branches · roles · product_categories
-L1: payment_accounts · commission_rules · products_services
+L0: branches · roles · product_categories · distributors
+L1: commission_rules · products_services
 L2: service_recipes · branch_stock
 ```
 Cada nivel solo se inserta después de que sus padres existen, para respetar FK constraints.
@@ -148,7 +150,9 @@ Para los 3 meses calendario completos inmediatamente anteriores a hoy:
 
 **Automático:** si cualquier operación de Onboarding o Demo Seed lanza una excepción, el `catch` del route handler llama a `rollback()` antes de cerrar el stream. El usuario ve el progreso del rollback en el mismo log terminal.
 
-**Manual (Undo clone):** después de una clonación exitosa, aparece en la UI un banner ámbar con el botón **"Undo clone"**. Al hacer click, envía `mode=rollback` al endpoint con solo el `target`. La UI muestra el mismo streaming en vivo.
+**Manual (Undo clone):** después de una clonación exitosa, aparece en la UI un banner ámbar con el botón **"Undo clone"**. Al hacer click, envía `mode: 'rollback'` al endpoint con el `target` y el `undoToken`. La UI muestra el mismo streaming en vivo.
+
+**Autorización del Undo:** el rollback manual borra todo el contenido del tenant, así que el servidor lo rechaza (403) sin un `undoToken` válido. El stream lo emite al terminar un clone (línea interna `undo-token:`, no visible en el log), va firmado con HMAC para ese `target` y vence en 1 hora (`lib/cloneUndoToken.ts`). Solo vive en el estado de la página: al recargar, el Undo ya no está disponible.
 
 ### Algoritmo
 
@@ -173,9 +177,11 @@ transaction_payments → tips → sales
 Cada tabla se borra con `DELETE WHERE tenant_id = targetId`. El registro del tenant en la tabla `tenants` **no se toca** — el tenant queda vacío pero existe.
 
 ### Garantías
-- Si un tenant estaba vacío antes del clone y algo falla, el rollback lo deja vacío de nuevo
+- Si un tenant estaba vacío antes del clone y algo falla, el rollback lo deja vacío de nuevo, salvo que el log diga `❌ Rollback incomplete`
 - No borra datos de ningún otro tenant (filtro estricto por `tenant_id`)
-- Si el rollback mismo falla en alguna tabla, continúa con las siguientes (sin abortar)
+- Si no puede leer el tenant o sus usuarios, aborta sin borrar nada: sin esos datos no sabe qué admin conservar
+- Si falla en alguna tabla, reporta `❌ <tabla>: <error>` y continúa con las siguientes. Al final informa las tablas fallidas y **no** emite `↩️`: el `↩️` significa que todo se borró
+- Tras un rollback incompleto, el banner "Undo clone" sigue disponible para reintentar (también si fue el rollback automático, que emite un `undoToken` nuevo)
 
 ### Compatibilidad con el guard de superadmin (`trg_guard_last_superadmin`)
 La BD de nubelsaas tiene un trigger que **aborta** cualquier borrado/actualización que deje al tenant **sin superadmin activo** mientras el tenant exista (sin bypass de sesión). Un `DELETE FROM users` masivo abortaría entero si intentara borrar al último superadmin.
@@ -190,16 +196,19 @@ Por eso el rollback **conserva exactamente un guardián**:
 
 ## Validación del tenant destino
 
-Antes de iniciar cualquier clone, la UI verifica que el tenant destino esté completamente vacío consultando:
-- `branches` · `users` · `products_services` · `sales`
+Antes de iniciar cualquier clone se verifica que el tenant destino esté completamente vacío consultando (`lib/cloneTarget.ts`):
+- `branches` · `users` · `products_services` · `sales` · `customers` · `payment_accounts`
 
-Si cualquiera tiene filas, el clone se bloquea con error visual en la UI (no llega al servidor).
+La UI lo usa para dar feedback (`check-target`), pero **la autoridad es el servidor**: `POST /api/clone/stream` repite el chequeo antes de abrir el stream y responde 409 si hay datos. Si el chequeo no se puede completar, el clone se bloquea (500); nunca se asume vacío, porque un fallo del clone dispara el rollback automático sobre el destino.
 
 ---
 
 ## Superadmin obligatorio del clon
 
-Tras un clone (Onboarding **o** Demo Seed), el tenant destino **no tiene ningún usuario con login**: los staff clonados están ofuscados y sin identidad de auth. Por eso ambos modos **exigen crear un superadmin nuevo** antes de poder ejecutar.
+Los staff clonados están ofuscados y sin identidad de auth, así que el clone no aporta ningún usuario con login. El tenant destino necesita un superadmin propio:
+
+- **Ya tiene uno** (lo normal: todo tenant creado con `POST /api/tenants` nace con su superadmin): `check-target` lo devuelve en `existingAdmin`, la UI lo muestra y se conserva. No se pide ni se crea otro, porque `POST /api/tenants/{id}/admin` rechaza un segundo (409).
+- **No tiene** (tenants antiguos): ambos modos **exigen crear un superadmin nuevo** antes de poder ejecutar. El resto de esta sección aplica a este caso.
 
 ### Regla de email — identidad nueva y exclusiva
 El email del superadmin **no puede existir ya en `auth.users`**. Un email en Supabase Auth es único a nivel global y mapea a **un solo** perfil/tenant (`self_heal_user_profile` resuelve el tenant por email en el login). Reusar un email ya registrado ataría un mismo login a dos tenants, lo cual el modelo no permite. Por eso se exige un email **nuevo**.
@@ -218,7 +227,7 @@ El email del superadmin **no puede existir ya en `auth.users`**. Un email en Sup
 ### Orquestación
 La creación corre **después** de que el clone termina con éxito, desde la UI, vía `POST /api/tenants/{target}/admin` con `require_new: true`. El resultado se muestra en el mismo log terminal:
 - `✅ Superadmin invited/created …` → el banner "Undo clone" aparece (clone completo).
-- `❌ Superadmin creation failed …` → el dato quedó sembrado pero sin admin; se sugiere "Undo clone" o reintentar desde Tenants → Users. El clone **no** se marca como completado.
+- `❌ Superadmin creation failed …` → el dato quedó sembrado pero sin admin; el banner "Undo clone" aparece igual, para poder revertir, o se reintenta desde Tenants → Users.
 
 El superadmin se crea con rol `Administrador` (`type: administrative`) y `permissions.can_do_everything = true`. El rol se deduplica por nombre con el rol clonado (misma lógica `DEDUP_BY_NAME`).
 
@@ -252,21 +261,26 @@ El superadmin se crea con rol `Administrador` (`type: administrative`) y `permis
 
 - Auth check: session activa requerida (middleware + route handler)
 - Admin check: el usuario debe existir en `admin_superadmins`
-- `mode=rollback` solo requiere `target` (no `source`) — no puede afectar al tenant origen
+- El endpoint es `POST` porque borra y escribe: las cookies `SameSite=Lax` no viajan en un POST cross-site, y abrir un link no puede dispararlo
+- `mode: 'rollback'` requiere `target` y un `undoToken` válido (no `source`) — no puede afectar al tenant origen ni a un tenant que no se acaba de clonar
 - Los datos reales de clientes **nunca** se transfieren (regla de negocio permanente)
 
 ---
 
 ## API — parámetros del endpoint SSE
 
-`GET /api/clone/stream`
+`POST /api/clone/stream` (body JSON)
 
-| Param | Requerido | Valores |
+| Campo | Requerido | Valores |
 |---|---|---|
 | `target` | siempre | UUID del tenant destino |
 | `source` | excepto rollback | UUID del tenant origen |
 | `mode` | siempre | `onboarding` · `demo` · `rollback` |
-| `copyStock` | no | `1` para copiar stock real (solo Onboarding) |
+| `copyStock` | no | `true` para copiar stock real (solo Onboarding) |
+| `exclude` | no | Tablas a omitir, separadas por coma |
+| `undoToken` | solo rollback | Token emitido al terminar el clone |
+
+Respuestas de error antes del stream: `400` parámetros inválidos · `403` sin permiso o `undoToken` inválido/vencido · `409` destino con datos · `500` no se pudo verificar el destino.
 
 ### Endpoints auxiliares del superadmin
 
@@ -285,6 +299,8 @@ El superadmin se crea con rol `Administrador` (`type: administrative`) y `permis
 | `app/api/clone/check-admin-email/route.ts` | Verifica disponibilidad del email del superadmin |
 | `app/api/tenants/[id]/admin/route.ts` | Crea el superadmin (acepta `require_new`) |
 | `lib/createAdminUser.ts` | Helper: rol + auth user + perfil; opción `requireNew` |
+| `lib/cloneTarget.ts` | Chequeo de destino vacío (UI y servidor) |
+| `lib/cloneUndoToken.ts` | Firma y verifica el token del Undo |
 | `lib/countries.ts` | `countryLabel`, `groupByCountry`, `COUNTRIES` config |
 | `lib/supabaseAdmin.ts` | Cliente service role para todos los writes |
 | `app/api/tenants/route.ts` | POST para crear tenant nuevo desde la UI |

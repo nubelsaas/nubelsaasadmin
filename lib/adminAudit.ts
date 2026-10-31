@@ -1,0 +1,41 @@
+import type { Session } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabaseAdmin';
+
+export const AUDIT_FAILED = 'Could not write the audit log. The action was not performed.';
+
+export type AdminAction =
+  | 'impersonate'
+  | 'user.magic_link'
+  | 'user.invite_resend'
+  | 'tenant.create'
+  | 'tenant.update'
+  | 'tenant.delete'
+  | 'tenant.admin_create'
+  | 'clone.onboarding'
+  | 'clone.demo'
+  | 'clone.rollback'
+  | 'clone.auto_rollback'
+  | 'import'
+  | 'category.create'
+  | 'category.update';
+
+/**
+ * Registra una acción del portal en admin_audit_logs. Se llama ANTES de ejecutarla: si devuelve
+ * false, la ruta debe abortar, para que ninguna acción quede sin registro.
+ * `details` nunca debe incluir contraseñas ni tokens.
+ */
+export async function logAdminAction(
+  session: Session,
+  action: AdminAction,
+  { tenantId = null, details = {} }: { tenantId?: string | null; details?: Record<string, unknown> } = {},
+): Promise<boolean> {
+  const { error } = await createAdminClient().from('admin_audit_logs').insert({
+    admin_user_id: session.user.id,
+    admin_email:   session.user.email ?? '',
+    action,
+    tenant_id:     tenantId,
+    details,
+  });
+  if (error) console.error(`[admin-audit] ${action}: ${error.message}`);
+  return !error;
+}

@@ -10,6 +10,7 @@ docs/
 │   ├── clone.md       ← Onboarding + Demo Seed (leer antes de tocar clone)
 │   ├── flags.md
 │   ├── impersonate.md
+│   ├── audit.md       ← Audit Log y regla de registro de escrituras
 │   ├── entornos.md    ← PROD vs DEV (leer antes de correr el portal)
 │   └── import.md      ← Pendiente de implementar
 ├── walkthroughs/
@@ -40,7 +41,7 @@ Todas las tablas creadas exclusivamente para este módulo de administración deb
 
 **Ejemplos:**
 - `admin_superadmins` — usuarios con acceso al portal de admin
-- `admin_audit_logs` — logs de acciones administrativas (futuro)
+- `admin_audit_logs` — acciones hechas desde el portal (`docs/features/audit.md`)
 
 **Motivo:** Las tablas del admin conviven en el mismo Supabase que las tablas del app principal (`tenants`, `users`, `sales`, etc.). El prefijo las identifica visualmente y evita colisiones de nombres.
 
@@ -74,12 +75,14 @@ El cliente browser usa la **anon key** y está sujeto a RLS. Las tablas del app 
 **Patrón obligatorio:**
 - **Lecturas** (`SELECT`): cliente browser (`createClient()`) — OK si hay política SELECT para el usuario autenticado.
 - **Escrituras** (`INSERT`, `UPDATE`, `DELETE`): siempre via API route (`/api/...`) que usa `createAdminClient()` (service role, bypasa RLS). La API route valida que el caller sea superadmin antes de ejecutar.
+- **Toda escritura se registra:** la ruta llama a `logAdminAction()` antes de ejecutar y aborta si falla (`docs/features/audit.md`).
 
 Rutas ya creadas:
 - `POST /api/tenants` — crear tenant
 - `PATCH /api/tenants/[id]` — actualizar tenant (name, admin_email, phone, city, feature_overrides, etc.)
+- `DELETE /api/tenants/[id]` — borrar tenant vacío y sus logins
 - `POST /api/impersonate` — generar magic link
-- `GET /api/clone/stream` — SSE clone progress
+- `POST /api/clone/stream` — SSE clone progress
 
 ## Auth
 - La autenticación usa `auth.users` de Supabase (mismo proyecto).

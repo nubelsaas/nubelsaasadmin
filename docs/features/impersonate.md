@@ -58,7 +58,7 @@ El link resultante tiene una vida útil corta (definida por Supabase, típicamen
 - Solo accesible para superadmins (validado en middleware y en la API route)
 - El magic link se muestra solo en pantalla — no se envía por email al usuario
 - El link se puede usar una sola vez
-- Se registra en el `audit_log` de Supabase automáticamente
+- Cada link generado queda en `admin_audit_logs` (acción `impersonate`, ver `docs/features/audit.md`)
 
 ---
 

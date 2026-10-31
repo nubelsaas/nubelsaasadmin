@@ -113,6 +113,19 @@ Todos vía `PATCH /api/tenants/[id]` (service role).
 
 Botones de acceso rápido a: Feature Flags, Impersonate, Clone, Audit log, Open app.
 
+### Borrar tenant
+
+Tarjeta **Delete tenant** al final del detalle. Hay que escribir el nombre exacto del tenant para confirmar, y no se puede deshacer.
+
+**Solo se borran tenants vacíos.** Se usa el criterio del destino de un clone (`findTargetData`): sin `branches`, `products_services`, `sales`, `customers`, `payment_accounts`, ni usuarios distintos de `admin_email`. Si se quedó con datos de un clone, primero usar Undo.
+
+Al borrar:
+- Las FK en cascada eliminan `users`, `roles`, `audit_log` y demás filas del tenant. `trg_guard_last_superadmin` no bloquea porque el tenant ya no existe cuando llega la cascada.
+- Se eliminan los logins de `auth.users` de sus usuarios, salvo los que estén en `admin_superadmins`. Si quedaran, el email seguiría ocupado para un admin nuevo. Si alguno falla, el tenant ya se borró y la pantalla lista esos emails.
+- `admin_audit_logs` conserva el registro, con el nombre del tenant en `details`. El logo sigue en el bucket `empresa-logos`.
+
+**No existe desactivar:** `tenants` no tiene columna de estado, y el app principal no bloquea el acceso por tenant.
+
 ### Public booking page
 
 Tarjeta con el URL público de reservas del salón: `${NEXT_PUBLIC_MAIN_APP_URL}/book/[tenant_id]` (portal servido por el app principal). Botones de **copiar** y **abrir** en nueva pestaña. Un badge indica si el portal está **Enabled** / **Not enabled** según `feature_overrides.publicAllowedServices` (mismo gate que la RPC `get_public_booking_config` del app: si está vacío, el enlace muestra "Salón no encontrado"). Útil para compartir el enlace de agendamiento con el salón.
@@ -225,6 +238,11 @@ Retorna tenant con stats:
 ### `PATCH /api/tenants/[id]`
 Campos patchables: `name`, `admin_email`, `phone`, `city`, `plan_id`, `feature_overrides`, `logo_url`.
 
+### `DELETE /api/tenants/[id]`
+Borra un tenant vacío y sus logins. Acepta `{ confirmName }`, que debe coincidir con `name` (400 si no).
+- `409` si el tenant tiene datos; `500` si no se pudo verificar. En ambos casos no se borra nada.
+- Retorna `{ ok: true, failedLogins: string[] }`.
+
 ### `GET /api/tenants/[id]/users`
 Retorna usuarios del tenant con rol:
 ```json
@@ -300,7 +318,7 @@ La tabla `tenants` **no tiene**: `is_active`, `slug`, `contact_email`, `plan` (t
 | `app/(admin)/tenants/[id]/users/page.tsx` | Gestión de usuarios del tenant |
 | `components/tenants/TenantCreateModal.tsx` | Modal de creación |
 | `app/api/tenants/route.ts` | GET lista · POST crear tenant (+admin) |
-| `app/api/tenants/[id]/route.ts` | GET detalle+stats · PATCH campos |
+| `app/api/tenants/[id]/route.ts` | GET detalle+stats · PATCH campos · DELETE tenant vacío |
 | `app/api/tenants/[id]/users/route.ts` | GET usuarios con roles |
 | `app/api/tenants/[id]/admin/route.ts` | POST crear admin en tenant existente |
 | `app/api/tenants/[id]/users/[userId]/resend/route.ts` | POST resend invite · magic link |

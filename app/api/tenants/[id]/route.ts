@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
+import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
+import { findTargetData } from '@/lib/cloneTarget';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -24,7 +26,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 const PATCHABLE_FIELDS = new Set(['name', 'admin_email', 'phone', 'city', 'country_iso', 'phone_prefix', 'plan_id', 'feature_overrides', 'logo_url', 'settings', 'currency_code', 'timezone', 'is_audit_enabled']);
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();
   const update: Record<string, unknown> = {};
@@ -34,9 +37,63 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (Object.keys(update).length === 0)
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
 
+  const logged = await logAdminAction(session, 'tenant.update', { tenantId: params.id, details: { changes: update } });
+  if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
+
   const db = createAdminClient();
   const { error } = await db.from('tenants').update(update).eq('id', params.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Borra un tenant vacío y sus logins. Solo vacío: el borrado no se puede deshacer, y las FK en
+ * cascada se llevarían ventas y clientes. "Vacío" es el mismo criterio del destino de un clone.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const { confirmName } = await req.json().catch(() => ({ confirmName: null }));
+
+  const db = createAdminClient();
+  const { data: tenant } = await db.from('tenants').select('name, admin_email').eq('id', params.id).single();
+  if (!tenant) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (confirmName !== tenant.name) return NextResponse.json({ error: 'The tenant name does not match' }, { status: 400 });
+
+  let offendingTables: string[];
+  try {
+    offendingTables = await findTargetData(db, params.id);
+  } catch {
+    return NextResponse.json({ error: 'Could not verify that the tenant is empty. Nothing was deleted.' }, { status: 500 });
+  }
+  if (offendingTables.length > 0) {
+    return NextResponse.json({ error: `This tenant still has data: ${offendingTables.join(', ')}. Nothing was deleted.` }, { status: 409 });
+  }
+
+  // Se leen antes de borrar: la cascada se lleva las filas de users, pero no los logins de auth.users.
+  const { data: users, error: usersError } = await db.from('users').select('id, email').eq('tenant_id', params.id);
+  if (usersError || !users) return NextResponse.json({ error: 'Could not read the tenant users. Nothing was deleted.' }, { status: 500 });
+
+  const { data: portalAdmins, error: portalAdminsError } = await db
+    .from('admin_superadmins').select('user_id').in('user_id', users.map(u => u.id));
+  if (portalAdminsError) return NextResponse.json({ error: 'Could not read the portal admins. Nothing was deleted.' }, { status: 500 });
+
+  const logged = await logAdminAction(session, 'tenant.delete', {
+    tenantId: params.id,
+    details: { name: tenant.name, admin_email: tenant.admin_email, users: users.map(u => u.email) },
+  });
+  if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
+
+  const { error } = await db.from('tenants').delete().eq('id', params.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Un login sin tenant no sirve, y su email quedaría bloqueado para un admin nuevo.
+  const keep = new Set((portalAdmins ?? []).map(a => a.user_id));
+  const logins = users.filter(u => !keep.has(u.id));
+  const results = await Promise.all(logins.map(u => db.auth.admin.deleteUser(u.id)));
+  const failedLogins = logins.filter((_, i) => results[i].error && results[i].error?.status !== 404).map(u => u.email);
+
+  return NextResponse.json({ ok: true, failedLogins });
 }

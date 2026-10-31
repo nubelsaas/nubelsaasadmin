@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
 import { createAdminUserForTenant } from '@/lib/createAdminUser';
+import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 
 export async function GET(req: NextRequest) {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -21,7 +22,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();
   const db = createAdminClient();
@@ -31,6 +33,11 @@ export async function POST(req: NextRequest) {
   // Invariante: todo tenant debe nacer con su Súper Administrador.
   const adminEmail: string | null = body.admin_email?.trim() || null;
   if (!adminEmail) return NextResponse.json({ error: 'admin_email is required' }, { status: 400 });
+
+  const logged = await logAdminAction(session, 'tenant.create', {
+    details: { name: body.name, admin_email: adminEmail, plan_id: body.plan_id },
+  });
+  if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
   const { data, error } = await db
     .from('tenants')

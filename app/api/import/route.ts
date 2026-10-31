@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
+import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 
 const ALLOWED_ENTITIES = new Set(['categories', 'services', 'inventory', 'clients']);
 
 export async function POST(req: NextRequest) {
-  if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();
   const { tenantId, entity, records } = body as {
@@ -20,6 +22,9 @@ export async function POST(req: NextRequest) {
   if (!ALLOWED_ENTITIES.has(entity)) {
     return NextResponse.json({ error: `Unknown entity: ${entity}` }, { status: 400 });
   }
+
+  const logged = await logAdminAction(session, 'import', { tenantId, details: { entity, records: records.length } });
+  if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
   const db = createAdminClient();
   let inserted = 0;

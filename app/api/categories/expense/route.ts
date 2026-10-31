@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
+import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 
 export async function GET() {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -18,11 +19,15 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { name, type } = await req.json();
   if (!name?.trim()) return NextResponse.json({ error: 'name is required' }, { status: 400 });
   if (!type)         return NextResponse.json({ error: 'type is required' }, { status: 400 });
+
+  const logged = await logAdminAction(session, 'category.create', { details: { name: name.trim(), type } });
+  if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
   const db = createAdminClient();
   const { data, error } = await db

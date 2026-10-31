@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AdminHeader from '@/components/layout/AdminHeader';
@@ -54,6 +54,11 @@ export default function TenantDetailPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoError,     setLogoError]     = useState<string | null>(null);
   const [copiedBooking, setCopiedBooking] = useState(false);
+  const [showDelete,    setShowDelete]    = useState(false);
+  const [deleteName,    setDeleteName]    = useState('');
+  const [deleting,      setDeleting]      = useState(false);
+  const [deleteError,   setDeleteError]   = useState<string | null>(null);
+  const [failedLogins,  setFailedLogins]  = useState<string[] | null>(null);
 
   // Editable fields
   const [email,    setEmail]    = useState('');
@@ -164,6 +169,27 @@ export default function TenantDetailPage() {
       setCopiedBooking(true);
       setTimeout(() => setCopiedBooking(false), 2000);
     } catch { /* clipboard unavailable — the input is still selectable */ }
+  }
+
+  function closeDelete() {
+    setShowDelete(false);
+    setDeleteName('');
+    setDeleteError(null);
+  }
+
+  async function handleDelete() {
+    setDeleteError(null);
+    setDeleting(true);
+    const res = await fetch(`/api/tenants/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmName: deleteName }),
+    });
+    const json = await res.json();
+    setDeleting(false);
+    if (!res.ok) { setDeleteError(json.error ?? 'Failed to delete'); return; }
+    if (json.failedLogins?.length > 0) setFailedLogins(json.failedLogins);
+    else router.push('/tenants');
   }
 
   if (loading) return <><AdminHeader title="Tenant" /><div className="p-8 text-sm text-slate-500">Loading...</div></>;
@@ -412,7 +438,74 @@ export default function TenantDetailPage() {
         <p className="text-xs text-slate-400">
           Created: {new Date(tenant.created_at).toLocaleDateString('en', { dateStyle: 'long' })}
         </p>
+
+        {/* Danger zone */}
+        <div className="bg-white rounded-2xl border border-rose-200 p-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-black text-slate-700">Delete tenant</p>
+            <p className="text-xs text-slate-400 mt-0.5">Only for empty tenants. Removes the tenant and its logins permanently.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDelete(true)}
+            className="flex items-center gap-1.5 text-xs font-bold rounded-full border border-rose-200 text-rose-600 px-4 py-2 hover:bg-rose-50 transition-colors flex-shrink-0"
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
       </div>
+
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-xl">
+            {failedLogins ? (
+              <>
+                <h2 className="text-base font-black text-slate-900">Tenant deleted</h2>
+                <p className="text-sm text-amber-700">
+                  These logins could not be removed and their emails stay taken: {failedLogins.join(', ')}. Remove them in Supabase → Authentication.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => router.push('/tenants')}
+                  className="w-full rounded-full bg-indigo-600 text-white font-black px-6 py-2.5 text-sm"
+                >
+                  OK
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 className="text-base font-black text-slate-900">Delete {tenant.name}?</h2>
+                <p className="text-sm text-slate-600">
+                  This can&apos;t be undone. It deletes the tenant, its settings and its users&apos; logins. Tenants with data are rejected.
+                </p>
+                <div>
+                  <label className={labelCls}>Type the tenant name to confirm</label>
+                  <input value={deleteName} onChange={e => setDeleteName(e.target.value)} className={inputCls} placeholder={tenant.name} />
+                </div>
+                {deleteError && <p className="text-sm text-rose-600">{deleteError}</p>}
+                <div className="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={closeDelete}
+                    disabled={deleting}
+                    className="text-sm font-bold rounded-full border border-slate-200 px-5 py-2.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleting || deleteName !== tenant.name}
+                    className="rounded-full bg-rose-600 text-white font-black px-5 py-2.5 text-sm disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting…' : 'Delete tenant'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

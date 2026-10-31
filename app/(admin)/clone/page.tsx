@@ -61,7 +61,7 @@ type Tenant = { id: string; name: string };
 type TargetState =
   | { status: 'idle' }
   | { status: 'checking' }
-  | { status: 'empty';    tenant: Tenant }
+  | { status: 'empty';    tenant: Tenant; existingAdmin?: string | null }
   | { status: 'has_data'; tenant: Tenant; offendingTables: string[] };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -165,6 +165,7 @@ export default function ClonePage() {
   const logRef = useRef<HTMLDivElement>(null);
 
   const [clonedTarget, setClonedTarget] = useState<Tenant | null>(null);
+  const [undoToken, setUndoToken] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [activeOp, setActiveOp] = useState<'onboarding' | 'demo' | 'rollback' | null>(null);
 
@@ -213,6 +214,7 @@ export default function ClonePage() {
     return () => clearTimeout(t);
   }, [adminEmail, emailFormatValid]);
 
+  const existingAdmin = targetState.status === 'empty' ? targetState.existingAdmin ?? null : null;
   const adminValid =
     emailFormatValid &&
     emailCheck.status === 'available' &&
@@ -226,9 +228,11 @@ export default function ClonePage() {
     setTargetSearch(t.name); setTargetResults([]);
     setTargetState({ status: 'checking' });
     const res = await fetch(`/api/clone/check-target?tenant_id=${t.id}`);
-    const { empty, offendingTables } = res.ok ? await res.json() : { empty: false, offendingTables: [] };
+    const { empty, offendingTables, existingAdmin } = res.ok
+      ? await res.json()
+      : { empty: false, offendingTables: [], existingAdmin: null };
     setTargetState(empty
-      ? { status: 'empty', tenant: t }
+      ? { status: 'empty', tenant: t, existingAdmin }
       : { status: 'has_data', tenant: t, offendingTables });
   }
 
@@ -242,8 +246,13 @@ export default function ClonePage() {
     setTargetState({ status: 'empty', tenant: { id: json.id, name: targetSearch.trim() } });
   }
 
-  async function readStream(url: string, onLine: (line: string) => void) {
-    const res = await fetch(url);
+  async function readStream(payload: Record<string, unknown>, onLine: (line: string) => void) {
+    const res = await fetch('/api/clone/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
     if (!res.body) throw new Error('No stream');
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -266,21 +275,34 @@ export default function ClonePage() {
     setClonedTarget(null);
     setLog(['Starting…']);
 
-    const params = new URLSearchParams({ source: sourceTenant.id, target: targetTenant.id, mode });
-    if (mode === 'onboarding' && copyStock) params.set('copyStock', '1');
-    if (excludedParam) params.set('exclude', excludedParam);
+    const payload = {
+      source: sourceTenant.id,
+      target: targetTenant.id,
+      mode,
+      copyStock: mode === 'onboarding' && copyStock,
+      exclude: excludedParam,
+    };
 
     let succeeded = false;
+    let canUndo = false;
     try {
-      await readStream(`/api/clone/stream?${params}`, line => {
+      await readStream(payload, line => {
+        // Línea interna del stream: autoriza "Undo clone", no se muestra en el log.
+        if (line.startsWith('undo-token:')) {
+          setUndoToken(line.slice('undo-token:'.length));
+          canUndo = true;
+          return;
+        }
         if (line.startsWith('✅')) succeeded = true;
         setLog(prev => [...prev, line]);
       });
 
-      // After the clone completes, create the required superadmin for the new tenant.
-      // The target has no loginable user otherwise (cloned staff are obfuscated /
-      // have no auth identity). require_new rejects emails already in auth.users.
-      if (succeeded) {
+      // A tenant created from Tenants is born with its superadmin (POST /api/tenants): keep it.
+      // Otherwise the target has no loginable user (cloned staff are obfuscated / have no
+      // auth identity), so create one. require_new rejects emails already in auth.users.
+      if (succeeded && existingAdmin) {
+        setLog(prev => [...prev, `✅ Tenant superadmin: ${existingAdmin}`]);
+      } else if (succeeded) {
         setLog(prev => [...prev, '──', '👤 Creating tenant superadmin…']);
         const res = await fetch(`/api/tenants/${targetTenant.id}/admin`, {
           method: 'POST',
@@ -294,7 +316,6 @@ export default function ClonePage() {
         });
         const json = await res.json();
         if (!res.ok) {
-          succeeded = false;
           setLog(prev => [...prev, `❌ Superadmin creation failed: ${json.error ?? 'unknown error'}`]);
           setLog(prev => [...prev, '⚠️  Tenant data was seeded but has no admin. Use "Undo clone" or retry from Tenants → Users.']);
         } else {
@@ -304,11 +325,10 @@ export default function ClonePage() {
         }
       }
     } catch (e: unknown) {
-      succeeded = false;
       setLog(prev => [...prev, `Error: ${e instanceof Error ? e.message : String(e)}`]);
     } finally {
       setRunning(false);
-      if (succeeded) setClonedTarget(targetTenant);
+      if (canUndo) setClonedTarget(targetTenant);
     }
   }
 
@@ -320,10 +340,9 @@ export default function ClonePage() {
     setActiveOp('rollback');
     setLog([`Undoing clone on "${target.name}"…`]);
 
-    const params = new URLSearchParams({ target: target.id, mode: 'rollback' });
     let succeeded = false;
     try {
-      await readStream(`/api/clone/stream?${params}`, line => {
+      await readStream({ target: target.id, mode: 'rollback', undoToken }, line => {
         if (line.startsWith('↩️')) succeeded = true;
         setLog(prev => [...prev, line]);
       });
@@ -336,7 +355,7 @@ export default function ClonePage() {
   }
 
   const includedCount = activeTables.filter(t => !fullyExcluded.has(t)).length;
-  const canRun = !!sourceTenant && targetState.status === 'empty' && adminValid && !running;
+  const canRun = !!sourceTenant && targetState.status === 'empty' && (!!existingAdmin || adminValid) && !running;
 
   const TOTAL_STEPS: Record<string, number> = { onboarding: 11, demo: 24, rollback: 20 };
   const completions = log.filter(l =>
@@ -506,8 +525,15 @@ export default function ClonePage() {
             </label>
           )}
 
-          {/* New superadmin — required for both modes */}
-          {targetState.status === 'empty' && (
+          {existingAdmin && (
+            <div className="border-t border-slate-100 pt-4 flex items-center gap-2 text-sm text-slate-700">
+              <ShieldCheck size={16} className="text-indigo-500 flex-shrink-0" />
+              <span>Tenant superadmin: <span className="font-medium">{existingAdmin}</span></span>
+            </div>
+          )}
+
+          {/* New superadmin — required when the target has none */}
+          {targetState.status === 'empty' && !existingAdmin && (
             <div className="border-t border-slate-100 pt-4 space-y-3">
               <p className="text-sm font-black text-slate-700 flex items-center gap-2">
                 <ShieldCheck size={16} className="text-indigo-500" /> New tenant superadmin
@@ -624,7 +650,7 @@ export default function ClonePage() {
         {clonedTarget && !running && (
           <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-amber-900">Clone completed</p>
+              <p className="text-sm font-semibold text-amber-900">Undo available</p>
               <p className="text-xs text-amber-600 mt-0.5">
                 Target: <span className="font-mono">{clonedTarget.name}</span> — all data can be removed
               </p>
@@ -667,8 +693,8 @@ export default function ClonePage() {
               <div className="flex gap-2">
                 <span className="text-slate-400 w-14 flex-shrink-0">Admin</span>
                 <span className="font-medium text-slate-800 truncate">
-                  {adminEmail.trim()}
-                  <span className="text-slate-400 ml-1">({adminMode === 'invite' ? 'invite' : 'password'})</span>
+                  {existingAdmin ?? adminEmail.trim()}
+                  <span className="text-slate-400 ml-1">({existingAdmin ? 'existing' : adminMode === 'invite' ? 'invite' : 'password'})</span>
                 </span>
               </div>
             </div>
