@@ -40,8 +40,10 @@ Sin foreign keys, para que el registro sobreviva al borrado del tenant o del adm
 Consecuencias:
 
 - El registro indica que la acción se **intentó**: se escribe antes, así que puede existir aunque la acción haya fallado después.
-- `details` nunca lleva contraseñas ni tokens.
-- Única excepción: `clone.auto_rollback` no bloquea, porque un clone a medias debe limpiarse igual.
+- `details` nunca lleva contraseñas ni tokens, y evita datos personales que no hagan falta.
+- No hay política de retención: los registros no se borran, incluidos los emails de `impersonate`.
+- Excepción: `clone.auto_rollback` y los registros de cierre (`clone.finished`, `clone.rollback_finished`, `clone.rollback_failed`) no bloquean, porque el trabajo ya se hizo o debe limpiarse igual.
+- Los registros `clone.*` también son estado: `lib/cloneUndo.ts` los lee para decidir si un tenant tiene Undo. No borrarlos ni renombrarlos.
 - `POST /api/upload/logo` no se registra: solo sube el archivo. El cambio queda en `tenant.update` al guardar `logo_url`.
 
 ---
@@ -50,13 +52,14 @@ Consecuencias:
 
 | Acción | Ruta | `details` |
 |---|---|---|
-| `impersonate` | `POST /api/impersonate` | `email` |
+| `impersonate` | `POST /api/impersonate` | `email`, `reason` |
 | `user.magic_link` · `user.invite_resend` | `POST /api/tenants/[id]/users/[userId]/resend` | `email` |
 | `tenant.create` | `POST /api/tenants` | `name`, `admin_email`, `plan_id` |
 | `tenant.update` | `PATCH /api/tenants/[id]` | `changes` (flags incluidos) |
-| `tenant.delete` | `DELETE /api/tenants/[id]` | `name`, `admin_email`, `users` (emails) |
+| `tenant.delete` | `DELETE /api/tenants/[id]` | `name`, `users` (cantidad) |
 | `tenant.admin_create` | `POST /api/tenants/[id]/admin` | `email`, `mode` |
 | `clone.onboarding` · `clone.demo` · `clone.rollback` | `POST /api/clone/stream` | `source`, `copyStock`, `exclude` |
+| `clone.finished` · `clone.rollback_finished` · `clone.rollback_failed` | `POST /api/clone/stream` | — (`error` si falló) |
 | `clone.auto_rollback` | `POST /api/clone/stream` | `error` |
 | `import` | `POST /api/import` | `entity`, `records` (cantidad) |
 | `category.create` · `category.update` | `/api/categories/expense` | `name`, `type` · `id`, `changes` |

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
 import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 import { findTargetData } from '@/lib/cloneTarget';
+import { EMPTY_TENANT_TABLES, findTablesWithRows } from '@/lib/tenantTables';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -12,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     db.from('tenants').select('id, name, admin_email, phone, city, country_iso, currency_code, timezone, plan_id, feature_overrides, settings, logo_url, created_at').eq('id', params.id).single(),
     db.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', params.id).eq('is_active', true),
     db.from('branches').select('id', { count: 'exact', head: true }).eq('tenant_id', params.id).eq('is_active', true),
-    db.from('sales').select('date_time').eq('tenant_id', params.id).order('date_time', { ascending: false }).limit(1),
+    db.from('transactions').select('date_time').eq('tenant_id', params.id).order('date_time', { ascending: false }).limit(1),
     db.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', params.id),
   ]);
 
@@ -49,7 +50,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 /**
  * Borra un tenant vacío y sus logins. Solo vacío: el borrado no se puede deshacer, y las FK en
- * cascada se llevarían ventas y clientes. "Vacío" es el mismo criterio del destino de un clone.
+ * cascada se llevarían ventas y clientes. "Vacío" es el criterio del destino de un clone, más
+ * cualquier otra tabla con filas del tenant, salvo las de EMPTY_TENANT_TABLES.
  */
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await assertSuperadmin();
@@ -64,7 +66,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   let offendingTables: string[];
   try {
-    offendingTables = await findTargetData(db, params.id);
+    const [targetData, otherTables] = await Promise.all([
+      findTargetData(db, params.id),
+      findTablesWithRows(db, params.id, EMPTY_TENANT_TABLES),
+    ]);
+    offendingTables = Array.from(new Set([...targetData, ...otherTables]));
   } catch {
     return NextResponse.json({ error: 'Could not verify that the tenant is empty. Nothing was deleted.' }, { status: 500 });
   }
@@ -82,7 +88,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const logged = await logAdminAction(session, 'tenant.delete', {
     tenantId: params.id,
-    details: { name: tenant.name, admin_email: tenant.admin_email, users: users.map(u => u.email) },
+    details: { name: tenant.name, users: users.length },
   });
   if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 

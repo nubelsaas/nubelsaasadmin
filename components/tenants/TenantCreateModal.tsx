@@ -215,11 +215,11 @@ export default function TenantCreateModal({ onClose, onCreated }: Props) {
                 <p className="text-sm font-medium text-slate-700">
                   {logoFile ? logoFile.name : 'Click to upload logo'}
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">PNG, JPG or SVG · max 2 MB</p>
+                <p className="text-xs text-slate-400 mt-0.5">PNG, JPG or WebP · max 2 MB</p>
               </div>
               <Upload size={16} className="text-slate-400 ml-auto flex-shrink-0" />
             </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
               onChange={handleFileChange} />
           </section>
 

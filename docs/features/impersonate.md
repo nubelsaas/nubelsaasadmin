@@ -12,6 +12,14 @@ Permite a un superadmin iniciar sesión como cualquier usuario del app principal
 
 ---
 
+## Límites
+
+- Hay que escribir un **motivo**; queda en `admin_audit_logs`.
+- Solo usuarios de un tenant. Rechaza emails que no estén en `users` (`404`) y admins del portal (`403`), porque entrar como ellos daría sus permisos sin su MFA.
+- **Pendiente en el app principal:** lo que se hace al impersonar queda en `audit_log` a nombre del usuario. Solo `admin_audit_logs` indica que un admin generó el link.
+
+---
+
 ## Interfaz
 
 Layout de dos paneles:

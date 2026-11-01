@@ -39,12 +39,14 @@ export default function ImpersonatePage() {
 
   async function handleImpersonate(user: TenantUser) {
     if (!user.email) return;
+    const reason = window.prompt(`Why do you need to sign in as ${user.email}?`);
+    if (!reason?.trim()) return;
     setGenerating(user.id);
     setLink(null);
     const res = await fetch('/api/impersonate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email }),
+      body: JSON.stringify({ email: user.email, reason }),
     });
     const json = await res.json();
     setGenerating(null);

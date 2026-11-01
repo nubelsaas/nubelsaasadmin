@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
 import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
+import { IMPORT_FIELDS, pickFields } from '@/lib/importFields';
 
 const ALLOWED_ENTITIES = new Set(['categories', 'services', 'inventory', 'clients']);
 
@@ -27,19 +28,16 @@ export async function POST(req: NextRequest) {
   if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
   const db = createAdminClient();
-  let inserted = 0;
 
-  async function batchInsert(table: string, rows: Record<string, unknown>[]) {
-    for (let i = 0; i < rows.length; i += 100) {
-      const { error } = await db.from(table as any).insert(rows.slice(i, i + 100) as any);
-      if (error) throw new Error(`${table}: ${error.message}`);
-      inserted += rows.slice(i, i + 100).length;
-    }
+  // Un solo INSERT es atómico: si una fila falla no entra ninguna y reintentar no duplica.
+  async function insertAll(table: string, rows: Record<string, unknown>[]) {
+    const { error } = await db.from(table as any).insert(rows as any);
+    if (error) throw new Error(`${table}: ${error.message}`);
   }
 
   try {
     if (entity === 'categories') {
-      await batchInsert('product_categories',
+      await insertAll('product_categories',
         records.map(r => ({ name: r.name, type: r.type || 'service', tenant_id: tenantId }))
       );
     }
@@ -53,21 +51,18 @@ export async function POST(req: NextRequest) {
 
       const rows = records.map(r => {
         const catName = ((r.category_name as string) ?? '').toLowerCase().trim();
-        const row: Record<string, unknown> = { ...r, tenant_id: tenantId };
-        row.category_id = catMap[catName] ?? null;
-        delete row.category_name;
-        return row;
+        return { ...pickFields(r, IMPORT_FIELDS[entity]), tenant_id: tenantId, category_id: catMap[catName] ?? null };
       });
-      await batchInsert('products_services', rows);
+      await insertAll('products_services', rows);
     }
 
     else if (entity === 'clients') {
-      await batchInsert('customers',
-        records.map(r => ({ ...r, tenant_id: tenantId }))
+      await insertAll('customers',
+        records.map(r => ({ ...pickFields(r, IMPORT_FIELDS.clients), tenant_id: tenantId }))
       );
     }
 
-    return NextResponse.json({ count: inserted });
+    return NextResponse.json({ count: records.length });
   } catch (e: unknown) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },

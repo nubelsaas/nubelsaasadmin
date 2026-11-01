@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy as CopyIcon, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AdminHeader from '@/components/layout/AdminHeader';
@@ -59,6 +59,7 @@ export default function TenantDetailPage() {
   const [deleting,      setDeleting]      = useState(false);
   const [deleteError,   setDeleteError]   = useState<string | null>(null);
   const [failedLogins,  setFailedLogins]  = useState<string[] | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   // Editable fields
   const [email,    setEmail]    = useState('');
@@ -171,6 +172,19 @@ export default function TenantDetailPage() {
     } catch { /* clipboard unavailable — the input is still selectable */ }
   }
 
+  async function handleTemplateToggle() {
+    if (!tenant) return;
+    setSavingTemplate(true);
+    const feature_overrides = { ...tenant.feature_overrides, cloneTemplate: !isTemplate };
+    const res = await fetch(`/api/tenants/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_overrides }),
+    });
+    if (res.ok) setTenant({ ...tenant, feature_overrides });
+    setSavingTemplate(false);
+  }
+
   function closeDelete() {
     setShowDelete(false);
     setDeleteName('');
@@ -196,6 +210,7 @@ export default function TenantDetailPage() {
   if (!tenant) return <><AdminHeader title="Tenant" /><div className="p-8 text-sm text-slate-500">Tenant not found</div></>;
 
   const currentPlan = plans.find(p => p.id === planId);
+  const isTemplate = tenant.feature_overrides?.cloneTemplate === true;
 
   // Public booking portal (served by the main app at /book/[tenant_id]).
   const bookingBase = process.env.NEXT_PUBLIC_MAIN_APP_URL ?? 'https://app.nubel.tech';
@@ -312,7 +327,7 @@ export default function TenantDetailPage() {
               </div>
             )}
             <div className="flex flex-col gap-2">
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogoUpload} />
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -438,6 +453,22 @@ export default function TenantDetailPage() {
         <p className="text-xs text-slate-400">
           Created: {new Date(tenant.created_at).toLocaleDateString('en', { dateStyle: 'long' })}
         </p>
+
+        {/* Clone template */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-black text-slate-700 flex items-center gap-2"><CopyIcon size={15} className="text-slate-400" /> Clone template</p>
+            <p className="text-xs text-slate-400 mt-0.5">Only templates can be a clone source. Its catalog, costs and suppliers get copied, so never use a real salon.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleTemplateToggle}
+            disabled={savingTemplate}
+            className="text-xs font-bold rounded-full border border-slate-200 px-4 py-2 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors flex-shrink-0"
+          >
+            {isTemplate ? 'Remove template' : 'Mark as template'}
+          </button>
+        </div>
 
         {/* Danger zone */}
         <div className="bg-white rounded-2xl border border-rose-200 p-5 flex items-center justify-between gap-4">

@@ -11,6 +11,7 @@ docs/
 │   ├── flags.md
 │   ├── impersonate.md
 │   ├── audit.md       ← Audit Log y regla de registro de escrituras
+│   ├── auth.md        ← Acceso: getUser, superadmin y MFA
 │   ├── entornos.md    ← PROD vs DEV (leer antes de correr el portal)
 │   └── import.md      ← Pendiente de implementar
 ├── walkthroughs/
@@ -25,11 +26,11 @@ El portal escribe en la base que indique el comando de arranque (`docs/features/
 
 | Comando | Variables | Base | URL local |
 |---|---|---|---|
-| `npm run dev` | `.env.local` | **PROD** | http://localhost:3002 |
-| `npm run dev:dev` | `.env.dev.local` | **DEV** | http://localhost:3003 |
+| `npm run dev` | `.env.dev.local` | **DEV** | http://localhost:3003 |
+| `npm run dev:prod` | `.env.local` | **PROD** | http://localhost:3002 |
 
 - La franja superior (`EnvBanner`) muestra siempre el entorno y la referencia del proyecto Supabase. **Antes de cualquier escritura, confirmar en qué base se está.**
-- Para probar cambios, usar **DEV** (`npm run dev:dev`). PROD solo cuando el usuario lo pida.
+- Para probar cambios, usar **DEV** (`npm run dev`). PROD solo cuando el usuario lo pida.
 - Las ramas `main` y `dev` organizan el código; no cambian la base.
 
 ## Stack
@@ -64,7 +65,8 @@ Verificar columna por columna los campos que se van a usar en `select`, `insert`
 | `tenants` | `id`, `name`, `admin_email`, `phone`, `city`, `feature_overrides`, `settings`, `created_at` — **NO tiene** `is_active`, `slug`, `contact_email`, `plan` |
 | `users` | `id`, `tenant_id`, `email`, `full_name`, `is_active`, `branch_id` |
 | `branches` | `id`, `tenant_id`, `name`, `is_active` |
-| `sales` | `id`, `tenant_id`, `date_time` (no `created_at`) |
+| `sales` | `id`, `tenant_id`, `transaction_id` — **NO tiene** `date_time`, `branch_id`, `status` en PROD (viven en `transactions`) |
+| `transactions` | `id`, `tenant_id`, `branch_id`, `status`, `date_time`, `created_at` |
 
 Este chequeo es obligatorio incluso si la tarea parece obvia. El costo de leer el schema es cero; el costo de corregir código con columnas inexistentes es alto.
 
@@ -81,11 +83,12 @@ Rutas ya creadas:
 - `POST /api/tenants` — crear tenant
 - `PATCH /api/tenants/[id]` — actualizar tenant (name, admin_email, phone, city, feature_overrides, etc.)
 - `DELETE /api/tenants/[id]` — borrar tenant vacío y sus logins
-- `POST /api/impersonate` — generar magic link
+- `POST /api/impersonate` — generar magic link (requiere `reason`)
 - `POST /api/clone/stream` — SSE clone progress
 
 ## Auth
-- La autenticación usa `auth.users` de Supabase (mismo proyecto).
+- La autenticación usa `auth.users` de Supabase (mismo proyecto), con MFA obligatorio (`docs/features/auth.md`).
+- Para autorizar usar `getUser()`, nunca `getSession()`.
 - Para verificar si un usuario es admin se consulta `admin_superadmins` por `user_id`.
 - La `SUPABASE_SERVICE_ROLE_KEY` se usa solo en rutas API server-side (impersonación, clone stream).
 

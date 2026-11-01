@@ -57,7 +57,7 @@ const DEMO_GENERATED_ITEMS = [
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Tenant = { id: string; name: string };
+type Tenant = { id: string; name: string; feature_overrides?: { cloneTemplate?: boolean } | null };
 type TargetState =
   | { status: 'idle' }
   | { status: 'checking' }
@@ -165,7 +165,7 @@ export default function ClonePage() {
   const logRef = useRef<HTMLDivElement>(null);
 
   const [clonedTarget, setClonedTarget] = useState<Tenant | null>(null);
-  const [undoToken, setUndoToken] = useState<string | null>(null);
+  const [undoNote, setUndoNote] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [activeOp, setActiveOp] = useState<'onboarding' | 'demo' | 'rollback' | null>(null);
 
@@ -178,7 +178,8 @@ export default function ClonePage() {
     const t = setTimeout(async () => {
       setSearchingSource(true);
       const res = await fetch(`/api/tenants?search=${encodeURIComponent(sourceSearch.trim())}`);
-      setSourceResults(res.ok ? (await res.json()).slice(0, 8) : []);
+      const tenants: Tenant[] = res.ok ? await res.json() : [];
+      setSourceResults(tenants.filter(t => t.feature_overrides?.cloneTemplate === true).slice(0, 8));
       setSearchingSource(false);
     }, 300);
     return () => clearTimeout(t);
@@ -228,9 +229,11 @@ export default function ClonePage() {
     setTargetSearch(t.name); setTargetResults([]);
     setTargetState({ status: 'checking' });
     const res = await fetch(`/api/clone/check-target?tenant_id=${t.id}`);
-    const { empty, offendingTables, existingAdmin } = res.ok
+    const { empty, offendingTables, existingAdmin, undo } = res.ok
       ? await res.json()
-      : { empty: false, offendingTables: [], existingAdmin: null };
+      : { empty: false, offendingTables: [], existingAdmin: null, undo: null };
+    setClonedTarget(undo?.available ? t : null);
+    setUndoNote(undo?.reason ?? null);
     setTargetState(empty
       ? { status: 'empty', tenant: t, existingAdmin }
       : { status: 'has_data', tenant: t, offendingTables });
@@ -284,15 +287,8 @@ export default function ClonePage() {
     };
 
     let succeeded = false;
-    let canUndo = false;
     try {
       await readStream(payload, line => {
-        // Línea interna del stream: autoriza "Undo clone", no se muestra en el log.
-        if (line.startsWith('undo-token:')) {
-          setUndoToken(line.slice('undo-token:'.length));
-          canUndo = true;
-          return;
-        }
         if (line.startsWith('✅')) succeeded = true;
         setLog(prev => [...prev, line]);
       });
@@ -328,29 +324,30 @@ export default function ClonePage() {
       setLog(prev => [...prev, `Error: ${e instanceof Error ? e.message : String(e)}`]);
     } finally {
       setRunning(false);
-      if (canUndo) setClonedTarget(targetTenant);
+      // El servidor decide si hay Undo, también tras un clone que falló a medias.
+      await selectTarget(targetTenant);
     }
   }
 
   async function handleUndo() {
     if (!clonedTarget || running) return;
+    const typed = window.prompt(`This deletes all the data in "${clonedTarget.name}" and can't be undone. Type the tenant name to confirm.`);
+    if (typed !== clonedTarget.name) return;
     const target = clonedTarget;
 
     setRunning(true);
     setActiveOp('rollback');
     setLog([`Undoing clone on "${target.name}"…`]);
 
-    let succeeded = false;
     try {
-      await readStream({ target: target.id, mode: 'rollback', undoToken }, line => {
-        if (line.startsWith('↩️')) succeeded = true;
+      await readStream({ target: target.id, mode: 'rollback' }, line => {
         setLog(prev => [...prev, line]);
       });
     } catch (e: unknown) {
       setLog(prev => [...prev, `Error: ${e instanceof Error ? e.message : String(e)}`]);
     } finally {
       setRunning(false);
-      if (succeeded) setClonedTarget(null);
+      await selectTarget(target);
     }
   }
 
@@ -476,10 +473,11 @@ export default function ClonePage() {
         <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Source tenant</label>
-            <TenantSearchInput placeholder="Search by name…" value={sourceSearch}
+            <TenantSearchInput placeholder="Search clone templates…" value={sourceSearch}
               onChange={v => { setSourceSearch(v); setSourceTenant(null); }}
               onSelect={selectSource} results={sourceResults} loading={searchingSource} />
             {sourceTenant && <p className="text-xs font-mono text-slate-400 mt-1.5">{sourceTenant.id}</p>}
+            <p className="text-xs text-slate-400 mt-1.5">Only tenants marked as a clone template appear here (tenant detail page).</p>
           </div>
 
           <div>
@@ -509,6 +507,7 @@ export default function ClonePage() {
                 </p>
               </div>
             )}
+            {undoNote && <p className="text-xs text-amber-600 mt-1">{undoNote}</p>}
             {targetSearch.trim().length > 1 && targetState.status === 'idle' && targetResults.length === 0 && !searchingTarget && (
               <button onClick={handleCreateTarget} disabled={creatingTenant}
                 className="flex items-center gap-2 mt-2 text-xs text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50">

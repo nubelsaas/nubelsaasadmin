@@ -5,8 +5,8 @@ que se arranca; no hay un selector dentro del portal.
 
 | Comando | Archivo de variables | Base (Supabase) | App principal | URL local |
 |---|---|---|---|---|
-| `npm run dev` | `.env.local` | **PROD** `buhljsqr…` | `https://app.nubel.tech` | http://localhost:3002 |
-| `npm run dev:dev` | `.env.dev.local` (gana sobre `.env.local`) | **DEV** `pwssiwhr…` | `https://nubelsaas-dev-gamma.vercel.app` | http://localhost:3003 |
+| `npm run dev` | `.env.dev.local` (gana sobre `.env.local`) | **DEV** `pwssiwhr…` | `https://nubelsaas-dev-gamma.vercel.app` | http://localhost:3003 |
+| `npm run dev:prod` | `.env.local` | **PROD** `buhljsqr…` | `https://app.nubel.tech` | http://localhost:3002 |
 
 Los dos pueden correr al mismo tiempo: DEV usa otro puerto y su propia carpeta de build
 (`NEXT_DIST_DIR=.next-dev`). Las sesiones no se mezclan, porque Supabase nombra la cookie con

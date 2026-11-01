@@ -46,7 +46,7 @@ Gestión completa de tenants: listado con búsqueda, creación de nuevos tenants
 | Currency | — | Auto-llenado por país, editable |
 | Timezone | — | Auto-llenado por país, editable |
 | Plan | ✓ | Plan de suscripción |
-| Logo | — | Imagen PNG/JPG/SVG, máx 2 MB. Se sube a Storage antes del POST |
+| Logo | — | Imagen PNG/JPG/WebP, máx 2 MB (lo valida el servidor; SVG no, puede llevar scripts). Se sube a Storage antes del POST |
 
 ### Flujo de creación con admin_email (obligatorio)
 
@@ -80,7 +80,7 @@ Antes del POST de creación, si hay logo seleccionado:
 |---|---|---|
 | Users | `COUNT(*) WHERE tenant_id = id AND is_active = true` en `users` | Navega a `/tenants/[id]/users` |
 | Branches | `COUNT(*) WHERE tenant_id = id AND is_active = true` en `branches` | — |
-| Last sale | `date_time` de la venta más reciente en `sales` | — |
+| Last sale | `date_time` de la transacción más reciente en `transactions` | — |
 
 ### Sección de Logo
 
@@ -113,16 +113,20 @@ Todos vía `PATCH /api/tenants/[id]` (service role).
 
 Botones de acceso rápido a: Feature Flags, Impersonate, Clone, Audit log, Open app.
 
+### Clone template
+
+Tarjeta en el detalle que marca o desmarca el tenant como origen de clones (`feature_overrides.cloneTemplate`). Solo un template puede ser origen, porque el clone copia su catálogo, costos y proveedores. No marcar nunca un salón real.
+
 ### Borrar tenant
 
 Tarjeta **Delete tenant** al final del detalle. Hay que escribir el nombre exacto del tenant para confirmar, y no se puede deshacer.
 
-**Solo se borran tenants vacíos.** Se usa el criterio del destino de un clone (`findTargetData`): sin `branches`, `products_services`, `sales`, `customers`, `payment_accounts`, ni usuarios distintos de `admin_email`. Si se quedó con datos de un clone, primero usar Undo.
+**Solo se borran tenants vacíos.** Se usa el criterio del destino de un clone (`findTargetData`) y además se revisan **todas** las tablas con `tenant_id`, leídas en vivo de la API (`lib/tenantTables.ts`): solo pueden tener filas `users`, `roles`, `audit_log` y `admin_audit_logs`. Si se quedó con datos de un clone, primero usar Undo. `audit_log` no bloquea, y su historial se borra con el tenant.
 
 Al borrar:
 - Las FK en cascada eliminan `users`, `roles`, `audit_log` y demás filas del tenant. `trg_guard_last_superadmin` no bloquea porque el tenant ya no existe cuando llega la cascada.
 - Se eliminan los logins de `auth.users` de sus usuarios, salvo los que estén en `admin_superadmins`. Si quedaran, el email seguiría ocupado para un admin nuevo. Si alguno falla, el tenant ya se borró y la pantalla lista esos emails.
-- `admin_audit_logs` conserva el registro, con el nombre del tenant en `details`. El logo sigue en el bucket `empresa-logos`.
+- `admin_audit_logs` conserva el registro, con el nombre del tenant y la cantidad de usuarios. El logo sigue en el bucket `empresa-logos`.
 
 **No existe desactivar:** `tenants` no tiene columna de estado, y el app principal no bloquea el acceso por tenant.
 

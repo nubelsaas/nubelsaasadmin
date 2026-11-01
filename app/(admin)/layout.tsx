@@ -4,17 +4,20 @@ import AdminSidebar from '@/components/layout/AdminSidebar';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createServerSupabaseClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session) redirect('/login');
+  if (!user) redirect('/login');
 
   const { data: admin } = await supabase
     .from('admin_superadmins')
     .select('id')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single();
 
   if (!admin) redirect('/login');
+
+  const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (assurance?.currentLevel !== 'aal2') redirect('/mfa');
 
   return (
     <div className="flex min-h-screen bg-slate-50">

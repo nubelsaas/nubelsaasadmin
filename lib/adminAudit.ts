@@ -13,7 +13,10 @@ export type AdminAction =
   | 'tenant.admin_create'
   | 'clone.onboarding'
   | 'clone.demo'
+  | 'clone.finished'
   | 'clone.rollback'
+  | 'clone.rollback_finished'
+  | 'clone.rollback_failed'
   | 'clone.auto_rollback'
   | 'import'
   | 'category.create'
@@ -25,7 +28,7 @@ export type AdminAction =
  * `details` nunca debe incluir contraseñas ni tokens.
  */
 export async function logAdminAction(
-  session: Session,
+  session: Pick<Session, 'user'>,
   action: AdminAction,
   { tenantId = null, details = {} }: { tenantId?: string | null; details?: Record<string, unknown> } = {},
 ): Promise<boolean> {

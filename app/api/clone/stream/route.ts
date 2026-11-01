@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
 import { findTargetData } from '@/lib/cloneTarget';
-import { createUndoToken, verifyUndoToken } from '@/lib/cloneUndoToken';
+import { getCloneRun, getUndoStatus } from '@/lib/cloneUndo';
+import { EMPTY_TENANT_TABLES, findTablesWithRows } from '@/lib/tenantTables';
 import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 import { randomUUID } from 'crypto';
 
@@ -32,11 +33,11 @@ const ONBOARDING_ORDER = [
 ];
 
 // ── Rollback order (reverse topological — children deleted before parents) ────
-// Covers every table with tenant_id so a partial clone can be fully undone.
+// Covers what a clone writes plus the operational tables. rollback() reports anything left elsewhere.
 // product_distributors is deleted separately (no tenant_id — uses product_id join).
 // expense_categories excluded — global rows must never be deleted by rollback.
 const ROLLBACK_ORDER = [
-  'transaction_payments', 'tips', 'sales', 'pos_quotes',
+  'transaction_payments', 'tips', 'sales', 'transactions', 'pos_quotes',
   'expenses_purchases', 'inventory_movements', 'payroll_advances_loans',
   'payrolls', 'attendance_records', 'bonification_records',
   'account_balance_entries', 'period_locks', 'customer_advances',
@@ -281,7 +282,6 @@ async function generateMonth(
   const label      = `${year}-${String(month).padStart(2, '0')}`;
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd   = new Date(year, month, 0);     // last day
-  const nextMonth  = new Date(year, month, 1);
   const workdays   = getWorkdaysForMonth(year, month);
 
   send(`📅 ${label} (${workdays.length} workdays)...`);
@@ -293,6 +293,7 @@ async function generateMonth(
 
   // ── Collect all rows for batch insert ──────────────────────────────────────
   const shifts:       Record<string, unknown>[] = [];
+  const headers:      Record<string, unknown>[] = [];
   const sales:        Record<string, unknown>[] = [];
   const payments:     Record<string, unknown>[] = [];
   const acctEntries:  Record<string, unknown>[] = [];
@@ -333,10 +334,16 @@ async function generateMonth(
         const total    = product.price + taxAmt;
         const txId     = randomUUID();
 
+        // Sucursal, fecha y estado viven en la cabecera: en PROD esas columnas ya no existen en sales.
+        headers.push({
+          id: txId, tenant_id: targetId, branch_id: branch.id,
+          customer_id: customer.id, cashier_user_id: cashier.id, shift_id: shiftId,
+          status: 'open', date_time: saleTime.toISOString(), total_sale_price: total,
+        });
+
         sales.push({
-          id: randomUUID(), tenant_id: targetId, branch_id: branch.id,
+          id: randomUUID(), tenant_id: targetId,
           shift_id: shiftId, transaction_id: txId,
-          date_time: saleTime.toISOString(),
           customer_id: customer.id,
           cashier_user_id: cashier.id,
           stylist_user_id: stylist?.id ?? null,
@@ -345,7 +352,7 @@ async function generateMonth(
           base_price: product.price,
           tax_amount_charged: taxAmt,
           total_sale_price: total,
-          applied_discount: 0, is_own_customer: false, status: 'open',
+          applied_discount: 0, is_own_customer: false,
         });
 
         if (structure.payAccount) {
@@ -369,7 +376,7 @@ async function generateMonth(
     }
   }
 
-  // Batch inserts: shifts → sales (triggers fire) → payments → acct entries
+  // Batch inserts: shifts → headers → sales (triggers fire, need the header) → payments → acct entries
   const batchInsert = async (table: string, rows: Record<string, unknown>[]) => {
     for (let i = 0; i < rows.length; i += BATCH) {
       const { error } = await db.from(table as any).insert(rows.slice(i, i + BATCH) as any);
@@ -378,6 +385,7 @@ async function generateMonth(
   };
 
   await batchInsert('cash_register_shifts',  shifts);
+  await batchInsert('transactions',          headers);
   await batchInsert('sales',                 sales);       // ← triggers populate generated_commission
   await batchInsert('transaction_payments',  payments);
   await batchInsert('account_balance_entries', acctEntries);
@@ -389,8 +397,7 @@ async function generateMonth(
     .from('sales' as any)
     .select('stylist_user_id, generated_commission')
     .eq('tenant_id', targetId)
-    .gte('date_time', monthStart.toISOString())
-    .lt('date_time',  nextMonth.toISOString());
+    .in('transaction_id', headers.map(h => h.id as string));
 
   const commByUser: Record<string, number> = {};
   for (const row of (commData ?? []) as Record<string, unknown>[]) {
@@ -538,6 +545,11 @@ async function rollback(
     return false;
   }
   send(`↩️  Rollback complete — ${total} rows removed.${keeper ? ' One guardian user kept.' : ' Target tenant is empty again.'}`);
+
+  // La lista de arriba es fija y el app principal agrega tablas: lo que quede se avisa.
+  const leftovers = await findTablesWithRows(db, targetId, EMPTY_TENANT_TABLES).catch(() => null);
+  if (leftovers === null) send('⚠️  Could not check for rows left in other tables.');
+  else if (leftovers.length) send(`⚠️  Rollback does not cover these tables and they still have rows: ${leftovers.join(', ')}`);
   return true;
 }
 
@@ -615,12 +627,9 @@ export async function POST(req: NextRequest) {
   if (!session) return new Response('Forbidden', { status: 403 });
 
   const body = await req.json().catch(() => null);
-  const { source, target, mode, undoToken } = (body ?? {}) as {
-    source?: string; target?: string; mode?: string; undoToken?: unknown;
-  };
+  const { source, target, mode } = (body ?? {}) as { source?: string; target?: string; mode?: string };
   const copyStock = body?.copyStock === true;
   const excluded  = new Set(String(body?.exclude ?? '').split(',').filter(Boolean));
-  const secret    = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
   if (!target) return new Response('Missing target', { status: 400 });
   if (mode !== 'onboarding' && mode !== 'demo' && mode !== 'rollback') {
@@ -628,17 +637,30 @@ export async function POST(req: NextRequest) {
   }
 
   if (mode === 'rollback') {
-    if (!verifyUndoToken(undoToken, target, secret)) {
-      return new Response('Undo is only available for a recent clone from this page', { status: 403 });
+    try {
+      const undo = await getUndoStatus(createAdminClient(), target);
+      if (!undo.available) {
+        return new Response(undo.reason ?? 'There is no clone to undo on this tenant', { status: 409 });
+      }
+    } catch (e: unknown) {
+      return new Response(e instanceof Error ? e.message : String(e), { status: 500 });
     }
   } else {
     if (!source) return new Response('Missing source', { status: 400 });
 
     // Antes de abrir el stream: si el destino falla aquí, el rollback automático no debe correr.
     try {
-      const offendingTables = await findTargetData(createAdminClient(), target);
+      const db = createAdminClient();
+      const offendingTables = await findTargetData(db, target);
       if (offendingTables.length) {
         return new Response(`Target tenant is not empty: ${offendingTables.join(', ')}`, { status: 409 });
+      }
+      if ((await getCloneRun(db, target)).state === 'running') {
+        return new Response('A clone or Undo is still running on this tenant', { status: 409 });
+      }
+      const { data: src } = await db.from('tenants').select('feature_overrides').eq('id', source).single();
+      if ((src?.feature_overrides as { cloneTemplate?: unknown } | null)?.cloneTemplate !== true) {
+        return new Response('The source tenant is not marked as a clone template', { status: 403 });
       }
     } catch (e: unknown) {
       return new Response(e instanceof Error ? e.message : String(e), { status: 500 });
@@ -651,10 +673,17 @@ export async function POST(req: NextRequest) {
   });
   if (!logged) return new Response(AUDIT_FAILED, { status: 500 });
 
+  // El clone sigue aunque se cierre la pestaña: cortarlo a la mitad dejaría el tenant a medio llenar.
+  let clientConnected = true;
+
   const stream = new ReadableStream({
+    cancel() {
+      clientConnected = false;
+    },
     async start(controller) {
-      const send = (msg: string) =>
-        controller.enqueue(new TextEncoder().encode(`data: ${msg}\n\n`));
+      const send = (msg: string) => {
+        if (clientConnected) controller.enqueue(new TextEncoder().encode(`data: ${msg}\n\n`));
+      };
       try {
         if (mode === 'rollback') {
           const db = createAdminClient();
@@ -663,25 +692,29 @@ export async function POST(req: NextRequest) {
           send(`Target : ${tgt.name}`);
           send(`Mode   : Rollback`);
           send('─'.repeat(40));
-          await rollback(target, db, send);
+          const cleaned = await rollback(target, db, send);
+          await logAdminAction(session, cleaned ? 'clone.rollback_finished' : 'clone.rollback_failed', { tenantId: target });
         } else if (mode === 'demo') {
           await runDemoSeedMode(source!, target, excluded, send);
         } else {
           await runOnboardingMode(source!, target, copyStock, excluded, send);
         }
-        if (mode !== 'rollback') send(`undo-token:${createUndoToken(target, secret)}`);
+        // Estos registros tampoco bloquean: el trabajo ya se hizo. Sin ellos la corrida pasa por interrumpida.
+        if (mode !== 'rollback') await logAdminAction(session, 'clone.finished', { tenantId: target });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        controller.enqueue(new TextEncoder().encode(`data: ❌ ${msg}\n\n`));
-        if (mode !== 'rollback') {
+        send(`❌ ${msg}`);
+        if (mode === 'rollback') {
+          await logAdminAction(session, 'clone.rollback_failed', { tenantId: target, details: { error: msg } });
+        } else {
           // Aquí el registro no bloquea: un clone a medias debe limpiarse igual.
           await logAdminAction(session, 'clone.auto_rollback', { tenantId: target, details: { error: msg } });
           const cleaned = await rollback(target, createAdminClient(), send);
           // Un clone a medias queda con datos y el destino ya no pasa el chequeo: Undo es el reintento.
-          if (!cleaned) send(`undo-token:${createUndoToken(target, secret)}`);
+          await logAdminAction(session, cleaned ? 'clone.rollback_finished' : 'clone.rollback_failed', { tenantId: target });
         }
       } finally {
-        controller.close();
+        if (clientConnected) controller.close();
       }
     },
   });

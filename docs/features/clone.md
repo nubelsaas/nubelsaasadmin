@@ -135,7 +135,7 @@ Para los 3 meses calendario completos inmediatamente anteriores a hoy:
 | Módulo | Datos generados |
 |---|---|
 | Dashboard | Ventas de 3 meses + métricas |
-| Ventas (POS) | `sales` + `transaction_payments` + `cash_register_shifts` |
+| Ventas (POS) | `transactions` (cabecera) + `sales` + `transaction_payments` + `cash_register_shifts` |
 | Clientes | 50 mocks navegables |
 | Cuentas | `account_balance_entries` (ingresos + gastos) |
 | Gastos | `expenses_purchases` por categoría |
@@ -150,16 +150,30 @@ Para los 3 meses calendario completos inmediatamente anteriores a hoy:
 
 **Automático:** si cualquier operación de Onboarding o Demo Seed lanza una excepción, el `catch` del route handler llama a `rollback()` antes de cerrar el stream. El usuario ve el progreso del rollback en el mismo log terminal.
 
-**Manual (Undo clone):** después de una clonación exitosa, aparece en la UI un banner ámbar con el botón **"Undo clone"**. Al hacer click, envía `mode: 'rollback'` al endpoint con el `target` y el `undoToken`. La UI muestra el mismo streaming en vivo.
+**Manual (Undo clone):** al terminar un clone, o al elegir como destino un tenant que tiene un clone deshacible, aparece en la UI un banner ámbar con el botón **"Undo clone"**. Pide confirmación y envía `mode: 'rollback'` al endpoint con el `target`. La UI muestra el mismo streaming en vivo.
 
-**Autorización del Undo:** el rollback manual borra todo el contenido del tenant, así que el servidor lo rechaza (403) sin un `undoToken` válido. El stream lo emite al terminar un clone (línea interna `undo-token:`, no visible en el log), va firmado con HMAC para ese `target` y vence en 1 hora (`lib/cloneUndoToken.ts`). Solo vive en el estado de la página: al recargar, el Undo ya no está disponible.
+**Autorización del Undo:** el rollback manual borra todo el contenido del tenant, incluidos datos reales si los hubiera, así que el servidor decide con los registros `clone.*` de `admin_audit_logs` (`lib/cloneUndo.ts`). Como vive en el servidor, sobrevive a recargar o cerrar la pestaña. Responde `409` con el motivo si no se puede. Según el último registro del tenant:
+
+| Último registro | Estado | Undo |
+|---|---|---|
+| `clone.finished` | Terminó | Sí, durante 1 hora |
+| `clone.onboarding` · `demo` · `rollback` · `auto_rollback` de hace menos de 15 min | Corriendo | No. Tampoco se puede iniciar otro clone |
+| Esos mismos, de hace 15 min o más | Interrumpido | Sí, sin límite de tiempo |
+| `clone.rollback_failed` | Rollback incompleto | Sí, sin límite de tiempo |
+| `clone.rollback_finished` o ninguno | Nada que deshacer | No: cada clone se deshace una sola vez |
+
+Además, se rechaza si el tenant tiene **actividad nueva** después del clone: filas en `customers`, `transactions` (toda venta tiene cabecera ahí), `appointments`, `expenses_purchases` o `inventory_movements`. Solo cuentan filas nuevas: editar un servicio o entrar al app no bloquea. En un clone interrumpido se cuenta desde 15 minutos después de su inicio, porque antes no se distinguen sus filas de las reales.
+
+**Tablas no cubiertas:** `ROLLBACK_ORDER` es una lista fija. Al terminar, el rollback revisa todas las tablas con `tenant_id` y avisa con `⚠️` si alguna fuera de la lista aún tiene filas. Si aparece una tabla nueva, agregarla a la lista.
+
+**Pestaña cerrada:** el clone sigue corriendo en el servidor. Al volver, elegir el tenant como destino muestra el estado. Si el servidor muere a la mitad, el tenant pasa a interrumpido a los 15 minutos y se limpia con Undo.
 
 ### Algoritmo
 
 Borra todas las filas del tenant destino en orden topológico inverso (hijos antes que padres), respetando FK constraints:
 
 ```
-transaction_payments → tips → sales
+transaction_payments → tips → sales → transactions
 → expenses_purchases → inventory_movements → payroll_advances_loans
 → payrolls → attendance_records → bonification_records
 → account_balance_entries → period_locks → customer_advances
@@ -181,7 +195,7 @@ Cada tabla se borra con `DELETE WHERE tenant_id = targetId`. El registro del ten
 - No borra datos de ningún otro tenant (filtro estricto por `tenant_id`)
 - Si no puede leer el tenant o sus usuarios, aborta sin borrar nada: sin esos datos no sabe qué admin conservar
 - Si falla en alguna tabla, reporta `❌ <tabla>: <error>` y continúa con las siguientes. Al final informa las tablas fallidas y **no** emite `↩️`: el `↩️` significa que todo se borró
-- Tras un rollback incompleto, el banner "Undo clone" sigue disponible para reintentar (también si fue el rollback automático, que emite un `undoToken` nuevo)
+- Tras un rollback incompleto, el banner "Undo clone" sigue disponible para reintentar (también si fue el rollback automático)
 
 ### Compatibilidad con el guard de superadmin (`trg_guard_last_superadmin`)
 La BD de nubelsaas tiene un trigger que **aborta** cualquier borrado/actualización que deje al tenant **sin superadmin activo** mientras el tenant exista (sin bypass de sesión). Un `DELETE FROM users` masivo abortaría entero si intentara borrar al último superadmin.
@@ -262,7 +276,7 @@ El superadmin se crea con rol `Administrador` (`type: administrative`) y `permis
 - Auth check: session activa requerida (middleware + route handler)
 - Admin check: el usuario debe existir en `admin_superadmins`
 - El endpoint es `POST` porque borra y escribe: las cookies `SameSite=Lax` no viajan en un POST cross-site, y abrir un link no puede dispararlo
-- `mode: 'rollback'` requiere `target` y un `undoToken` válido (no `source`) — no puede afectar al tenant origen ni a un tenant que no se acaba de clonar
+- `mode: 'rollback'` requiere `target` (no `source`) y un clone deshacible en ese tenant — no puede afectar al tenant origen ni a un tenant que no se acaba de clonar
 - Los datos reales de clientes **nunca** se transfieren (regla de negocio permanente)
 
 ---
@@ -274,13 +288,12 @@ El superadmin se crea con rol `Administrador` (`type: administrative`) y `permis
 | Campo | Requerido | Valores |
 |---|---|---|
 | `target` | siempre | UUID del tenant destino |
-| `source` | excepto rollback | UUID del tenant origen |
+| `source` | excepto rollback | UUID del tenant origen. Debe ser un clone template (`feature_overrides.cloneTemplate`, `403` si no) |
 | `mode` | siempre | `onboarding` · `demo` · `rollback` |
 | `copyStock` | no | `true` para copiar stock real (solo Onboarding) |
 | `exclude` | no | Tablas a omitir, separadas por coma |
-| `undoToken` | solo rollback | Token emitido al terminar el clone |
 
-Respuestas de error antes del stream: `400` parámetros inválidos · `403` sin permiso o `undoToken` inválido/vencido · `409` destino con datos · `500` no se pudo verificar el destino.
+Respuestas de error antes del stream: `400` parámetros inválidos · `403` sin permiso u origen que no es template · `409` destino con datos, clone en curso o Undo no disponible · `500` no se pudo verificar el destino.
 
 ### Endpoints auxiliares del superadmin
 
@@ -300,7 +313,7 @@ Respuestas de error antes del stream: `400` parámetros inválidos · `403` sin 
 | `app/api/tenants/[id]/admin/route.ts` | Crea el superadmin (acepta `require_new`) |
 | `lib/createAdminUser.ts` | Helper: rol + auth user + perfil; opción `requireNew` |
 | `lib/cloneTarget.ts` | Chequeo de destino vacío (UI y servidor) |
-| `lib/cloneUndoToken.ts` | Firma y verifica el token del Undo |
+| `lib/cloneUndo.ts` | Estado del último clone y si se puede deshacer |
 | `lib/countries.ts` | `countryLabel`, `groupByCountry`, `COUNTRIES` config |
 | `lib/supabaseAdmin.ts` | Cliente service role para todos los writes |
 | `app/api/tenants/route.ts` | POST para crear tenant nuevo desde la UI |
