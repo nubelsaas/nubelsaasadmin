@@ -113,6 +113,15 @@ Todos vía `PATCH /api/tenants/[id]` (service role).
 
 Botones de acceso rápido a: Feature Flags, Impersonate, Clone, Audit log, Open app.
 
+### Exportar datos
+
+Tarjeta **Export data** en el detalle. Pide un motivo y descarga un ZIP con un CSV por tabla y un `LEEME.txt` (`lib/tenantExport.ts`). También funciona con un tenant suspendido, porque solo lee.
+
+- **Lista permitida:** `EXPORT_SPECS` nombra cada tabla y columna; una nueva no sale hasta agregarla. Toda columna debe existir en PROD y en DEV.
+- **Fuera:** fotos y adjuntos, números de documento, PIN, datos bancarios y permisos del equipo, clientes eliminados, tokens, audit logs, soporte y asistente.
+- **Todo o nada:** cada tabla se compara contra su conteo exacto. Si una falla, responde `500` y no se descarga nada.
+- **Sin copias:** el ZIP se arma en memoria y no se guarda. Hay que entregarlo por un canal seguro, nunca como adjunto de correo.
+
 ### Suspensión
 
 Tarjeta **Suspension** en el detalle. Pide un motivo, que queda en `admin_audit_logs` y no en el tenant, porque el salón puede leer su propia fila. Escribe `tenants.suspended_at`, que solo puede cambiar nubel-admin.
@@ -255,6 +264,9 @@ Borra un tenant vacío y sus logins. Acepta `{ confirmName }`, que debe coincidi
 - `409` si el tenant tiene datos; `500` si no se pudo verificar. En ambos casos no se borra nada.
 - Retorna `{ ok: true, failedLogins: string[] }`.
 
+### `POST /api/tenants/[id]/export`
+Descarga el ZIP. Acepta `{ reason: string }`, obligatorio.
+
 ### `POST /api/tenants/[id]/suspension`
 Suspende o reactiva. Acepta `{ suspended: boolean, reason: string }`; el motivo es obligatorio. Retorna `{ suspended_at }`.
 
@@ -335,6 +347,8 @@ La tabla `tenants` **no tiene**: `is_active`, `slug`, `contact_email`, `plan` (t
 | `app/api/tenants/route.ts` | GET lista · POST crear tenant (+admin) |
 | `app/api/tenants/[id]/route.ts` | GET detalle+stats · PATCH campos · DELETE tenant vacío |
 | `app/api/tenants/[id]/users/route.ts` | GET usuarios con roles |
+| `app/api/tenants/[id]/export/route.ts` | POST exportar datos del tenant |
+| `lib/tenantExport.ts` | Lista permitida, CSV y ZIP |
 | `app/api/tenants/[id]/suspension/route.ts` | POST suspender · reactivar |
 | `app/api/tenants/[id]/admin/route.ts` | POST crear admin en tenant existente |
 | `app/api/tenants/[id]/users/[userId]/resend/route.ts` | POST resend invite · magic link |

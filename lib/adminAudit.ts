@@ -12,6 +12,8 @@ export type AdminAction =
   | 'tenant.delete'
   | 'tenant.suspend'
   | 'tenant.reactivate'
+  | 'tenant.export'
+  | 'tenant.export_finished'
   | 'tenant.admin_create'
   | 'clone.onboarding'
   | 'clone.demo'

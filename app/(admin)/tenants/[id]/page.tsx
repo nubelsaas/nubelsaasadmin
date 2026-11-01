@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Ban, Copy as CopyIcon, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check, Trash2 } from 'lucide-react';
+import { ArrowLeft, Ban, Copy as CopyIcon, Download, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AdminHeader from '@/components/layout/AdminHeader';
@@ -61,6 +61,8 @@ export default function TenantDetailPage() {
   const [failedLogins,  setFailedLogins]  = useState<string[] | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [savingSuspension, setSavingSuspension] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [suspensionError, setSuspensionError] = useState<string | null>(null);
 
   // Editable fields
@@ -185,6 +187,31 @@ export default function TenantDetailPage() {
     });
     if (res.ok) setTenant({ ...tenant, feature_overrides });
     setSavingTemplate(false);
+  }
+
+  async function handleExport() {
+    if (!tenant) return;
+    const reason = window.prompt(`Why are you exporting the data of "${tenant.name}"? It includes customer personal data.`);
+    if (!reason?.trim()) return;
+
+    setExportError(null);
+    setExporting(true);
+    const res = await fetch(`/api/tenants/${id}/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (res.ok) {
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `nubel-export-${tenant.name.replace(/[^\w-]+/g, '_')}.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } else {
+      setExportError((await res.json()).error ?? 'Export failed');
+    }
+    setExporting(false);
   }
 
   async function handleSuspensionToggle() {
@@ -476,6 +503,25 @@ export default function TenantDetailPage() {
         <p className="text-xs text-slate-400">
           Created: {new Date(tenant.created_at).toLocaleDateString('en', { dateStyle: 'long' })}
         </p>
+
+        {/* Export */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-black text-slate-700 flex items-center gap-2"><Download size={15} className="text-slate-400" /> Export data</p>
+              <p className="text-xs text-slate-400 mt-0.5">Downloads a ZIP of CSV files with the salon&apos;s records. It has personal data: never send it as an email attachment.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting}
+              className="text-xs font-bold rounded-full border border-slate-200 px-4 py-2 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors flex-shrink-0"
+            >
+              {exporting ? 'Exporting…' : 'Export'}
+            </button>
+          </div>
+          {exportError && <p className="text-xs text-rose-600">{exportError}</p>}
+        </div>
 
         {/* Suspension */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-2">
