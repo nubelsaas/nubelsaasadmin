@@ -7,7 +7,7 @@ export async function GET() {
 
   const { data, error } = await createAdminClient()
     .from('subscription_plans')
-    .select('id, name, monthly_price')
+    .select('id, name, monthly_price, default_features')
     .order('monthly_price', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

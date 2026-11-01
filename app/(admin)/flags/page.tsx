@@ -2,8 +2,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Search, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
+import { planDefault } from '@/lib/planFeatures';
 
-type Tenant = { id: string; name: string; feature_overrides: Record<string, unknown> | null; settings: Record<string, unknown> | null; is_audit_enabled: boolean };
+type Plan = { id: string; default_features: Record<string, unknown> | null };
+type Tenant = { id: string; name: string; plan_id: string | null; feature_overrides: Record<string, unknown> | null; settings: Record<string, unknown> | null; is_audit_enabled: boolean };
 
 type BoolFlag = { key: string; label: string; description: string; defaultOn: boolean };
 
@@ -38,6 +40,7 @@ const REMINDER_CHANNELS: ReminderChannel[] = [
 
 export default function FlagsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Tenant | null>(null);
   const [flags, setFlags] = useState<Record<string, unknown>>({});
@@ -58,6 +61,10 @@ export default function FlagsPage() {
 
   useEffect(() => { loadTenants(); }, [loadTenants]);
 
+  useEffect(() => {
+    fetch('/api/plans').then(res => (res.ok ? res.json() : [])).then(setPlans);
+  }, []);
+
   function selectTenant(t: Tenant) {
     setSelected(t);
     const fo = (t.feature_overrides ?? {}) as Record<string, unknown>;
@@ -69,7 +76,20 @@ export default function FlagsPage() {
 
   function getFlagValue(key: string, defaultOn: boolean): boolean {
     if (key in flags) return Boolean(flags[key]);
-    return defaultOn;
+    return selectedPlanDefault(key) ?? defaultOn;
+  }
+
+  function selectedPlanDefault(key: string) {
+    const plan = plans.find(p => p.id === selected?.plan_id);
+    return planDefault(key, plan?.default_features);
+  }
+
+  function resetFlag(key: string) {
+    setFlags(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   }
 
   function toggleFlag(key: string, defaultOn: boolean) {
@@ -160,6 +180,16 @@ export default function FlagsPage() {
                           <p className="text-sm font-medium text-slate-800">{label}</p>
                           <p className="text-xs text-slate-400 mt-0.5">{description}</p>
                           <p className="text-[10px] font-mono text-slate-300 mt-0.5">{key}</p>
+                          {selectedPlanDefault(key) !== undefined && (
+                            key in flags ? (
+                              <p className="text-[11px] text-amber-600 mt-1">
+                                Override of the plan ({selectedPlanDefault(key) ? 'on' : 'off'}).{' '}
+                                <button type="button" onClick={() => resetFlag(key)} className="font-bold underline">Use plan</button>
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-slate-400 mt-1">From plan</p>
+                            )
+                          )}
                         </div>
                         <button type="button" onClick={() => toggleFlag(key, defaultOn)} className={on ? 'text-indigo-500' : 'text-slate-300'}>
                           {on ? <ToggleRight size={30} /> : <ToggleLeft size={30} />}

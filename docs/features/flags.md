@@ -12,6 +12,16 @@ Activar o desactivar funcionalidades del app principal por tenant. Los flags se 
 
 ---
 
+## Plan y overrides
+
+El plan del tenant define el valor por defecto de cuatro flags: `enableTips`, `enableCustomerAdvancements`, `enableGiftCards` y `enableScheduler` (`subscription_plans.default_features`, equivalencias en `lib/planFeatures.ts`). Una clave en `feature_overrides` gana siempre, y la pantalla la marca como **Override**. **Use plan** la quita al guardar.
+
+`staff_app`, `whatsapp_ia`, `multi_branch` y `electronic_billing` existen en los planes pero aún no tienen efecto: el app no tiene un flag que controlen.
+
+Salvo `enableShifts`, que también se lee en SQL, estos flags solo muestran u ocultan funciones en el app.
+
+---
+
 ## Interfaz
 
 Layout de dos paneles:
