@@ -5,6 +5,7 @@ import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 import { findTargetData } from '@/lib/cloneTarget';
 import { EMPTY_TENANT_TABLES, findTablesWithRows } from '@/lib/tenantTables';
 import { changedRegionFields, hasFinancialHistory } from '@/lib/regionLock';
+import { applyJsonChanges, isJsonChanges } from '@/lib/jsonChanges';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -27,7 +28,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   });
 }
 
-const PATCHABLE_FIELDS = new Set(['name', 'admin_email', 'phone', 'city', 'country_iso', 'phone_prefix', 'plan_id', 'feature_overrides', 'logo_url', 'settings', 'currency_code', 'timezone', 'is_audit_enabled']);
+const PATCHABLE_FIELDS = new Set(['name', 'admin_email', 'phone', 'city', 'country_iso', 'phone_prefix', 'plan_id', 'logo_url', 'currency_code', 'timezone', 'is_audit_enabled']);
+const JSON_FIELDS = ['feature_overrides', 'settings'] as const;
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await assertSuperadmin();
@@ -38,12 +40,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   for (const key of Object.keys(body)) {
     if (PATCHABLE_FIELDS.has(key)) update[key] = body[key];
   }
-  if (Object.keys(update).length === 0)
+
+  const jsonChanges = JSON_FIELDS.filter(field => `${field}_changes` in body);
+  if (jsonChanges.some(field => !isJsonChanges(body[`${field}_changes`]))) {
+    return NextResponse.json({ error: 'Invalid changes' }, { status: 400 });
+  }
+  if (Object.keys(update).length === 0 && jsonChanges.length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+  }
 
   const db = createAdminClient();
 
-  const { data: current } = await db.from('tenants').select('country_iso, currency_code, timezone, phone_prefix').eq('id', params.id).single();
+  const { data: current } = await db
+    .from('tenants')
+    .select('country_iso, currency_code, timezone, phone_prefix, is_audit_enabled, feature_overrides, settings')
+    .eq('id', params.id)
+    .single();
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const changedRegion = changedRegionFields(current, update);
@@ -57,13 +69,33 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  const logged = await logAdminAction(session, 'tenant.update', { tenantId: params.id, details: { changes: update } });
+  const disablingAudit = update.is_audit_enabled === false && current.is_audit_enabled !== false;
+  const auditReason = typeof body.audit_reason === 'string' ? body.audit_reason.trim() : '';
+  if (disablingAudit && auditReason.length < 5) {
+    return NextResponse.json({ error: 'A reason is required to turn off the audit log' }, { status: 400 });
+  }
+
+  const logged = await logAdminAction(session, 'tenant.update', {
+    tenantId: params.id,
+    details: {
+      changes: { ...update, ...Object.fromEntries(jsonChanges.map(field => [field, body[`${field}_changes`]])) },
+      ...(disablingAudit && { audit_reason: auditReason }),
+    },
+  });
   if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
-  const { error } = await db.from('tenants').update(update).eq('id', params.id);
+  for (const field of jsonChanges) update[field] = applyJsonChanges(current[field], body[`${field}_changes`]);
+
+  // Solo escribe si el JSON sigue como se leyó: entre leer y guardar pudo cambiarlo el salón.
+  let query = db.from('tenants').update(update).eq('id', params.id);
+  for (const field of jsonChanges) {
+    query = current[field] === null ? query.is(field, null) : query.eq(field, JSON.stringify(current[field]));
+  }
+  const { data, error } = await query.select('feature_overrides, settings');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  if (!data?.length) return NextResponse.json({ error: 'This tenant just changed. Reload and try again.' }, { status: 409 });
+  return NextResponse.json({ ok: true, ...data[0] });
 }
 
 /**

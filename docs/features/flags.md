@@ -65,6 +65,14 @@ Layout de dos paneles:
 
 ---
 
+## Cómo se guarda
+
+La pantalla envía solo lo que cambió (`feature_overrides_changes` y `settings_changes`, `lib/jsonChanges.ts`), nunca el objeto completo: así no borra lo que el salón escribió mientras estaba abierta. `PATCH /api/tenants/[id]` ya no acepta `feature_overrides` ni `settings` completos. Si el JSON cambió entre leerlo y guardarlo, responde `409` y hay que recargar.
+
+Apagar el Audit Log pide un motivo, que queda en `admin_audit_logs`.
+
+---
+
 ## Comportamiento de los flags
 
 ```typescript

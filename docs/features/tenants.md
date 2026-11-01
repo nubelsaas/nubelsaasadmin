@@ -271,7 +271,7 @@ Retorna tenant con stats:
 ```
 
 ### `PATCH /api/tenants/[id]`
-Campos patchables: `name`, `admin_email`, `phone`, `city`, `plan_id`, `feature_overrides`, `logo_url`.
+Campos patchables: `name`, `admin_email`, `phone`, `city`, `plan_id`, `logo_url`, región y `is_audit_enabled` (apagarlo exige `audit_reason`). Los JSON van como `feature_overrides_changes` y `settings_changes`: `{ set, remove }`.
 
 ### `DELETE /api/tenants/[id]`
 Borra un tenant vacío y sus logins. Acepta `{ confirmName }`, que debe coincidir con `name` (400 si no).

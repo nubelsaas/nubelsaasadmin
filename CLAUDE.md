@@ -81,7 +81,7 @@ El cliente browser usa la **anon key** y está sujeto a RLS. Las tablas del app 
 
 Rutas ya creadas:
 - `POST /api/tenants` — crear tenant
-- `PATCH /api/tenants/[id]` — actualizar tenant (name, admin_email, phone, city, feature_overrides, etc.)
+- `PATCH /api/tenants/[id]` — actualizar tenant (name, admin_email, phone, city, etc.; los JSON van como `*_changes`)
 - `DELETE /api/tenants/[id]` — borrar tenant vacío y sus logins
 - `POST /api/tenants/[id]/suspension` — suspender o reactivar (requiere `reason`)
 - `POST /api/tenants/[id]/export` — descargar ZIP con los datos del tenant (requiere `reason`)

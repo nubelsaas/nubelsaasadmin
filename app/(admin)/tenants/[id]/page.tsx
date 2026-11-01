@@ -181,13 +181,12 @@ export default function TenantDetailPage() {
   async function handleTemplateToggle() {
     if (!tenant) return;
     setSavingTemplate(true);
-    const feature_overrides = { ...tenant.feature_overrides, cloneTemplate: !isTemplate };
     const res = await fetch(`/api/tenants/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feature_overrides }),
+      body: JSON.stringify({ feature_overrides_changes: { set: { cloneTemplate: !isTemplate }, remove: [] } }),
     });
-    if (res.ok) setTenant({ ...tenant, feature_overrides });
+    if (res.ok) setTenant({ ...tenant, feature_overrides: (await res.json()).feature_overrides });
     setSavingTemplate(false);
   }
 

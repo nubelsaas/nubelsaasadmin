@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Search, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
 import { planDefault } from '@/lib/planFeatures';
+import { diffJson } from '@/lib/jsonChanges';
 
 type Plan = { id: string; default_features: Record<string, unknown> | null };
 type Tenant = { id: string; name: string; plan_id: string | null; feature_overrides: Record<string, unknown> | null; settings: Record<string, unknown> | null; is_audit_enabled: boolean };
@@ -48,6 +49,7 @@ export default function FlagsPage() {
   const [auditEnabled, setAuditEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [loadingTenants, setLoadingTenants] = useState(false);
 
   const loadTenants = useCallback(async () => {
@@ -114,20 +116,38 @@ export default function FlagsPage() {
 
   async function handleSave() {
     if (!selected) return;
+
+    const disablingAudit = !auditEnabled && selected.is_audit_enabled !== false;
+    const auditReason = disablingAudit
+      ? window.prompt(`Why are you turning off the audit log for "${selected.name}"? Changes in this salon stop being recorded.`)
+      : null;
+    if (disablingAudit && !auditReason?.trim()) return;
+
+    setSaveError(null);
     setSaving(true);
-    const newFlags: Record<string, unknown> = { ...flags };
 
     const res = await fetch(`/api/tenants/${selected.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feature_overrides: newFlags, settings, is_audit_enabled: auditEnabled }),
+      body: JSON.stringify({
+        feature_overrides_changes: diffJson(selected.feature_overrides, flags),
+        settings_changes: diffJson(selected.settings, settings),
+        is_audit_enabled: auditEnabled,
+        audit_reason: auditReason,
+      }),
     });
+    const json = await res.json();
 
     if (res.ok) {
-      setSelected(prev => prev ? { ...prev, feature_overrides: newFlags, settings, is_audit_enabled: auditEnabled } : prev);
-      setTenants(prev => prev.map(t => t.id === selected.id ? { ...t, feature_overrides: newFlags, settings, is_audit_enabled: auditEnabled } : t));
+      const updated = { ...selected, feature_overrides: json.feature_overrides, settings: json.settings, is_audit_enabled: auditEnabled };
+      setSelected(updated);
+      setFlags(json.feature_overrides ?? {});
+      setSettings(json.settings ?? {});
+      setTenants(prev => prev.map(t => (t.id === selected.id ? updated : t)));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } else {
+      setSaveError(json.error ?? 'Failed to save');
     }
     setSaving(false);
   }
@@ -273,6 +293,7 @@ export default function FlagsPage() {
                 </div>
               </div>
 
+              {saveError && <p className="text-sm text-rose-600">{saveError}</p>}
               <button onClick={handleSave} disabled={saving}
                 className="flex items-center gap-2 rounded-full bg-indigo-600 text-white font-black px-6 py-2.5 text-sm disabled:opacity-50">
                 <Save size={15} />
