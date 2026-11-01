@@ -6,7 +6,7 @@ import AdminHeader from '@/components/layout/AdminHeader';
 import TenantCreateModal from '@/components/tenants/TenantCreateModal';
 import { countryLabel, groupByCountry } from '@/lib/countries';
 
-type Tenant = { id: string; name: string; admin_email: string | null; created_at: string; country_iso: string | null };
+type Tenant = { id: string; name: string; admin_email: string | null; created_at: string; country_iso: string | null; suspended_at: string | null };
 
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -61,7 +61,10 @@ export default function TenantsPage() {
                     <Link key={t.id} href={`/tenants/${t.id}`}
                       className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 px-4 py-3 hover:border-indigo-200 transition-colors">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{t.name}</p>
+                        <p className="text-sm font-semibold text-slate-900 truncate">
+                          {t.name}
+                          {t.suspended_at && <span className="ml-2 text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Suspended</span>}
+                        </p>
                         <p className="text-xs text-slate-400 truncate">{t.admin_email ?? '—'}</p>
                       </div>
                       <p className="text-xs text-slate-400 flex-shrink-0">

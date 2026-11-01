@@ -10,6 +10,8 @@ export type AdminAction =
   | 'tenant.create'
   | 'tenant.update'
   | 'tenant.delete'
+  | 'tenant.suspend'
+  | 'tenant.reactivate'
   | 'tenant.admin_create'
   | 'clone.onboarding'
   | 'clone.demo'

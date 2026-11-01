@@ -56,6 +56,7 @@ Consecuencias:
 | `user.magic_link` · `user.invite_resend` | `POST /api/tenants/[id]/users/[userId]/resend` | `email` |
 | `tenant.create` | `POST /api/tenants` | `name`, `admin_email`, `plan_id` |
 | `tenant.update` | `PATCH /api/tenants/[id]` | `changes` (flags incluidos) |
+| `tenant.suspend` · `tenant.reactivate` | `POST /api/tenants/[id]/suspension` | `reason` |
 | `tenant.delete` | `DELETE /api/tenants/[id]` | `name`, `users` (cantidad) |
 | `tenant.admin_create` | `POST /api/tenants/[id]/admin` | `email`, `mode` |
 | `clone.onboarding` · `clone.demo` · `clone.rollback` | `POST /api/clone/stream` | `source`, `copyStock`, `exclude` |

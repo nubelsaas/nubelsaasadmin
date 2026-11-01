@@ -113,6 +113,14 @@ Todos vía `PATCH /api/tenants/[id]` (service role).
 
 Botones de acceso rápido a: Feature Flags, Impersonate, Clone, Audit log, Open app.
 
+### Suspensión
+
+Tarjeta **Suspension** en el detalle. Pide un motivo, que queda en `admin_audit_logs` y no en el tenant, porque el salón puede leer su propia fila. Escribe `tenants.suspended_at`, que solo puede cambiar nubel-admin.
+
+Un salón suspendido queda de **solo lectura**, incluido su dueño (`trg_block_suspended_writes` en nubelsaas). También se apagan la reserva pública, el bot de WhatsApp, los recordatorios y el alta de staff. El chat de soporte sigue activo. Al reactivar, los recordatorios pendientes vuelven a salir.
+
+Requiere la migración `20261101130000_tenant_suspension.sql` de nubelsaas **antes** de desplegar: sin la columna, las pantallas de tenants fallan.
+
 ### Clone template
 
 Tarjeta en el detalle que marca o desmarca el tenant como origen de clones (`feature_overrides.cloneTemplate`). Solo un template puede ser origen, porque el clone copia su catálogo, costos y proveedores. No marcar nunca un salón real.
@@ -247,6 +255,9 @@ Borra un tenant vacío y sus logins. Acepta `{ confirmName }`, que debe coincidi
 - `409` si el tenant tiene datos; `500` si no se pudo verificar. En ambos casos no se borra nada.
 - Retorna `{ ok: true, failedLogins: string[] }`.
 
+### `POST /api/tenants/[id]/suspension`
+Suspende o reactiva. Acepta `{ suspended: boolean, reason: string }`; el motivo es obligatorio. Retorna `{ suspended_at }`.
+
 ### `GET /api/tenants/[id]/users`
 Retorna usuarios del tenant con rol:
 ```json
@@ -324,6 +335,7 @@ La tabla `tenants` **no tiene**: `is_active`, `slug`, `contact_email`, `plan` (t
 | `app/api/tenants/route.ts` | GET lista · POST crear tenant (+admin) |
 | `app/api/tenants/[id]/route.ts` | GET detalle+stats · PATCH campos · DELETE tenant vacío |
 | `app/api/tenants/[id]/users/route.ts` | GET usuarios con roles |
+| `app/api/tenants/[id]/suspension/route.ts` | POST suspender · reactivar |
 | `app/api/tenants/[id]/admin/route.ts` | POST crear admin en tenant existente |
 | `app/api/tenants/[id]/users/[userId]/resend/route.ts` | POST resend invite · magic link |
 | `lib/createAdminUser.ts` | Shared: crea role + auth user + users row |

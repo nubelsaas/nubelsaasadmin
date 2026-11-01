@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const db = createAdminClient();
   let query = db
     .from('tenants')
-    .select('id, name, admin_email, created_at, country_iso, feature_overrides, settings, is_audit_enabled')
+    .select('id, name, admin_email, created_at, country_iso, feature_overrides, settings, is_audit_enabled, suspended_at')
     .order('country_iso', { nullsFirst: false })
     .order('name');
   if (search) query = query.ilike('name', `%${search}%`);

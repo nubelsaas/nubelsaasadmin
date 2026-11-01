@@ -83,6 +83,7 @@ Rutas ya creadas:
 - `POST /api/tenants` — crear tenant
 - `PATCH /api/tenants/[id]` — actualizar tenant (name, admin_email, phone, city, feature_overrides, etc.)
 - `DELETE /api/tenants/[id]` — borrar tenant vacío y sus logins
+- `POST /api/tenants/[id]/suspension` — suspender o reactivar (requiere `reason`)
 - `POST /api/impersonate` — generar magic link (requiere `reason`)
 - `POST /api/clone/stream` — SSE clone progress
 

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Copy as CopyIcon, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check, Trash2 } from 'lucide-react';
+import { ArrowLeft, Ban, Copy as CopyIcon, Save, Users, GitBranch, ShoppingBag, ExternalLink, CreditCard, ImagePlus, X, UserRound, CalendarCheck, Copy, Check, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AdminHeader from '@/components/layout/AdminHeader';
@@ -10,7 +10,7 @@ type Tenant = {
   id: string; name: string; admin_email: string | null;
   phone: string | null; city: string | null; country_iso: string | null;
   currency_code: string | null; timezone: string | null; phone_prefix: string | null;
-  plan_id: string | null; logo_url: string | null;
+  plan_id: string | null; logo_url: string | null; suspended_at: string | null;
   feature_overrides: Record<string, unknown> | null;
   settings: Record<string, unknown> | null;
   created_at: string;
@@ -60,6 +60,8 @@ export default function TenantDetailPage() {
   const [deleteError,   setDeleteError]   = useState<string | null>(null);
   const [failedLogins,  setFailedLogins]  = useState<string[] | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [savingSuspension, setSavingSuspension] = useState(false);
+  const [suspensionError, setSuspensionError] = useState<string | null>(null);
 
   // Editable fields
   const [email,    setEmail]    = useState('');
@@ -183,6 +185,27 @@ export default function TenantDetailPage() {
     });
     if (res.ok) setTenant({ ...tenant, feature_overrides });
     setSavingTemplate(false);
+  }
+
+  async function handleSuspensionToggle() {
+    if (!tenant) return;
+    const suspended = !tenant.suspended_at;
+    const reason = window.prompt(suspended
+      ? `Why are you suspending "${tenant.name}"? Its staff will only be able to read.`
+      : `Why are you reactivating "${tenant.name}"?`);
+    if (!reason?.trim()) return;
+
+    setSuspensionError(null);
+    setSavingSuspension(true);
+    const res = await fetch(`/api/tenants/${id}/suspension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suspended, reason }),
+    });
+    const json = await res.json();
+    if (res.ok) setTenant({ ...tenant, suspended_at: json.suspended_at });
+    else setSuspensionError(json.error ?? 'Failed to update');
+    setSavingSuspension(false);
   }
 
   function closeDelete() {
@@ -453,6 +476,32 @@ export default function TenantDetailPage() {
         <p className="text-xs text-slate-400">
           Created: {new Date(tenant.created_at).toLocaleDateString('en', { dateStyle: 'long' })}
         </p>
+
+        {/* Suspension */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-black text-slate-700 flex items-center gap-2">
+                <Ban size={15} className="text-slate-400" /> Suspension
+                {tenant.suspended_at && <span className="text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Suspended</span>}
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {tenant.suspended_at
+                  ? `Read-only since ${new Date(tenant.suspended_at).toLocaleDateString('en', { dateStyle: 'long' })}. The reason is in the audit log.`
+                  : 'Makes the salon read-only and stops public booking, WhatsApp and reminders. Support chat stays on.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSuspensionToggle}
+              disabled={savingSuspension}
+              className="text-xs font-bold rounded-full border border-slate-200 px-4 py-2 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors flex-shrink-0"
+            >
+              {tenant.suspended_at ? 'Reactivate' : 'Suspend'}
+            </button>
+          </div>
+          {suspensionError && <p className="text-xs text-rose-600">{suspensionError}</p>}
+        </div>
 
         {/* Clone template */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between gap-4">

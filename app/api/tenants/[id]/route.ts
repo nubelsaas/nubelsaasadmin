@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const db = createAdminClient();
   const [{ data: tenant }, { count: activeUsers }, { count: branches }, { data: lastSaleData }, { count: customers }] = await Promise.all([
-    db.from('tenants').select('id, name, admin_email, phone, city, country_iso, currency_code, timezone, plan_id, feature_overrides, settings, logo_url, created_at').eq('id', params.id).single(),
+    db.from('tenants').select('id, name, admin_email, phone, city, country_iso, currency_code, timezone, plan_id, feature_overrides, settings, logo_url, suspended_at, created_at').eq('id', params.id).single(),
     db.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', params.id).eq('is_active', true),
     db.from('branches').select('id', { count: 'exact', head: true }).eq('tenant_id', params.id).eq('is_active', true),
     db.from('transactions').select('date_time').eq('tenant_id', params.id).order('date_time', { ascending: false }).limit(1),
