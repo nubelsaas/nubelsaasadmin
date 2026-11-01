@@ -13,7 +13,7 @@ docs/
 │   ├── audit.md       ← Audit Log y regla de registro de escrituras
 │   ├── auth.md        ← Acceso: getUser, superadmin y MFA
 │   ├── entornos.md    ← PROD vs DEV (leer antes de correr el portal)
-│   └── import.md      ← Pendiente de implementar
+│   └── import.md      ← CSV: duplicados, salón en operación y Undo
 ├── walkthroughs/
 │   └── 20260529_admin_portal_v1.md
 └── plans/

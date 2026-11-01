@@ -26,6 +26,9 @@ export type AdminAction =
   | 'clone.rollback_failed'
   | 'clone.auto_rollback'
   | 'import'
+  | 'import.finished'
+  | 'import.undone'
+  | 'import.undo_finished'
   | 'category.create'
   | 'category.update';
 

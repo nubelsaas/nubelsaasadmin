@@ -82,7 +82,7 @@ export default function ImportPage() {
         </div>
 
         {/* Import sections — only shown when a tenant is selected */}
-        {selected && <ImportSections tenantId={selected.id} />}
+        {selected && <ImportSections key={selected.id} tenantId={selected.id} />}
 
       </div>
     </>

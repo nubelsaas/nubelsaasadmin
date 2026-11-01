@@ -1,8 +1,8 @@
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Upload, FileText, Check, X, Loader2, ChevronDown, ChevronUp,
-  Tag, Scissors, Package, Users, RotateCcw, AlertTriangle,
+  Tag, Scissors, Package, Users, RotateCcw, AlertTriangle, Search,
 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -22,8 +22,12 @@ interface SectionState {
   mapping: Record<string, string>;
   status: 'idle' | 'ready' | 'importing' | 'done' | 'error';
   importCount: number;
+  skipped: number;
+  preview: { fresh: number; duplicates: number; live: boolean } | null;
   error: string | null;
 }
+
+type RecentImport = { id: string; entity: string; inserted: number; created_at: string };
 
 // ── Field definitions ──────────────────────────────────────────────────────────
 
@@ -73,7 +77,7 @@ const SECTION_CONFIGS = [
 ];
 
 const INITIAL_SECTION: SectionState = {
-  file: null, csvData: null, mapping: {}, status: 'idle', importCount: 0, error: null,
+  file: null, csvData: null, mapping: {}, status: 'idle', importCount: 0, skipped: 0, preview: null, error: null,
 };
 
 // ── CSV parser (no external library) ─────────────────────────────────────────
@@ -256,6 +260,29 @@ export default function ImportSections({ tenantId }: { tenantId: string }) {
     clients:    { ...INITIAL_SECTION },
   });
   const [openSection, setOpenSection] = useState<SectionId | null>('categories');
+  const [recent, setRecent] = useState<RecentImport[]>([]);
+  const [undoMessage, setUndoMessage] = useState<string | null>(null);
+
+  const loadRecent = useCallback(async () => {
+    const res = await fetch(`/api/import?tenantId=${tenantId}`);
+    setRecent(res.ok ? await res.json() : []);
+  }, [tenantId]);
+
+  useEffect(() => { loadRecent(); }, [loadRecent]);
+
+  async function handleUndo(item: RecentImport) {
+    if (!window.confirm(`Remove the ${item.inserted} ${item.entity} records from this import? Records already in use stay.`)) return;
+    const res = await fetch('/api/import/undo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ importId: item.id }),
+    });
+    const json = await res.json();
+    setUndoMessage(res.ok
+      ? `${json.removed} records removed${json.kept ? `, ${json.kept} kept because they are in use` : ''}.`
+      : json.error ?? 'Undo failed');
+    loadRecent();
+  }
 
   const updateSection = (id: SectionId, patch: Partial<SectionState>) =>
     setSections(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
@@ -265,7 +292,7 @@ export default function ImportSections({ tenantId }: { tenantId: string }) {
     reader.onload = e => {
       const csvData = parseCSV(e.target?.result as string);
       const mapping = autoMatch(csvData.headers, fields);
-      updateSection(sectionId, { file, csvData, mapping, status: 'ready', error: null, importCount: 0 });
+      updateSection(sectionId, { file, csvData, mapping, status: 'ready', error: null, importCount: 0, preview: null });
     };
     reader.readAsText(file, 'UTF-8');
   }, []);
@@ -340,11 +367,16 @@ export default function ImportSections({ tenantId }: { tenantId: string }) {
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId, entity: sectionId, records }),
+        body: JSON.stringify({ tenantId, entity: sectionId, records, dryRun: !state.preview, confirmLive: state.preview?.live }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Import failed');
-      updateSection(sectionId, { status: 'done', importCount: json.count });
+      if (!state.preview) {
+        updateSection(sectionId, { status: 'ready', preview: json });
+        return;
+      }
+      updateSection(sectionId, { status: 'done', importCount: json.count, skipped: json.skipped, preview: null });
+      loadRecent();
     } catch (err: unknown) {
       updateSection(sectionId, { status: 'error', error: err instanceof Error ? err.message : 'Import failed' });
     }
@@ -360,6 +392,23 @@ export default function ImportSections({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="space-y-4">
+      {(recent.length > 0 || undoMessage) && (
+        <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4 space-y-2">
+          <p className="font-black text-sm text-slate-800">Recent imports</p>
+          {recent.map(item => (
+            <div key={item.id} className="flex items-center justify-between gap-3 text-xs text-slate-600">
+              <span>{item.inserted} {item.entity} · {new Date(item.created_at).toLocaleTimeString('en', { timeStyle: 'short' })}</span>
+              <button type="button" onClick={() => handleUndo(item)}
+                className="flex items-center gap-1 text-[10px] font-black rounded-full border border-slate-200 px-3 py-1.5 hover:bg-slate-50">
+                <RotateCcw size={11} /> Undo
+              </button>
+            </div>
+          ))}
+          {undoMessage && <p className="text-xs text-slate-500">{undoMessage}</p>}
+          <p className="text-[10px] text-slate-400">Undo is available for 1 hour.</p>
+        </div>
+      )}
+
       <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4">
         <p className="font-black text-indigo-800 text-sm mb-1">Import order matters</p>
         <p className="text-xs text-indigo-600">
@@ -413,7 +462,7 @@ export default function ImportSections({ tenantId }: { tenantId: string }) {
                 {state.csvData && (
                   <>
                     <ColumnMapper headers={state.csvData.headers} fields={section.fields}
-                      mapping={state.mapping} onChange={m => updateSection(section.id, { mapping: m })} />
+                      mapping={state.mapping} onChange={m => updateSection(section.id, { mapping: m, preview: null })} />
                     <PreviewTable headers={state.csvData.headers} rows={state.csvData.rows}
                       mapping={state.mapping} fields={section.fields} />
                   </>
@@ -430,7 +479,7 @@ export default function ImportSections({ tenantId }: { tenantId: string }) {
                   <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Check size={15} className="text-emerald-600" />
-                      <p className="text-xs font-black text-emerald-700">{state.importCount} records imported successfully</p>
+                      <p className="text-xs font-black text-emerald-700">{state.importCount} records imported{state.skipped > 0 ? `, ${state.skipped} duplicates skipped` : ''}</p>
                     </div>
                     <button type="button" onClick={() => updateSection(section.id, { ...INITIAL_SECTION })}
                       className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-slate-600 transition-colors">
@@ -439,14 +488,24 @@ export default function ImportSections({ tenantId }: { tenantId: string }) {
                   </div>
                 )}
 
+                {state.preview && (
+                  <div className={`rounded-xl px-4 py-3 border text-xs space-y-1 ${state.preview.live ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                    <p className="font-black">{state.preview.fresh} new, {state.preview.duplicates} already exist and will be skipped.</p>
+                    {state.preview.live && <p>This salon is live: it has financial records. Check the file before importing.</p>}
+                    <p>Records with no document, email or phone can&apos;t be checked for duplicates.</p>
+                  </div>
+                )}
+
                 {canImport && state.csvData && (
                   <div className="flex justify-end">
                     <button type="button" onClick={() => handleImport(section.id)}
-                      disabled={state.status === 'importing'}
+                      disabled={state.status === 'importing' || state.preview?.fresh === 0}
                       className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-full font-black text-sm disabled:opacity-50">
                       {state.status === 'importing'
                         ? <><Loader2 size={15} className="animate-spin" /> Importing…</>
-                        : <><Upload size={15} /> Import {state.csvData.rows.length} records</>}
+                        : state.preview
+                          ? <><Upload size={15} /> Import {state.preview.fresh} records{state.preview.live ? ' into live salon' : ''}</>
+                          : <><Search size={15} /> Check {state.csvData.rows.length} records</>}
                     </button>
                   </div>
                 )}

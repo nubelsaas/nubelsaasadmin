@@ -43,7 +43,7 @@ Consecuencias:
 - `details` nunca lleva contraseñas ni tokens, y evita datos personales que no hagan falta.
 - No hay política de retención: los registros no se borran, incluidos los emails de `impersonate`.
 - Excepción: `clone.auto_rollback` y los registros de cierre (`clone.finished`, `clone.rollback_finished`, `clone.rollback_failed`) no bloquean, porque el trabajo ya se hizo o debe limpiarse igual.
-- Los registros `clone.*` también son estado: `lib/cloneUndo.ts` los lee para decidir si un tenant tiene Undo. No borrarlos ni renombrarlos.
+- Los registros `clone.*` e `import.*` también son estado: Undo los lee para decidir qué se puede deshacer. No borrarlos ni renombrarlos.
 - `POST /api/upload/logo` no se registra: solo sube el archivo. El cambio queda en `tenant.update` al guardar `logo_url`.
 
 ---
@@ -64,5 +64,7 @@ Consecuencias:
 | `clone.onboarding` · `clone.demo` · `clone.rollback` | `POST /api/clone/stream` | `source`, `copyStock`, `exclude` |
 | `clone.finished` · `clone.rollback_finished` · `clone.rollback_failed` | `POST /api/clone/stream` | — (`error` si falló) |
 | `clone.auto_rollback` | `POST /api/clone/stream` | `error` |
-| `import` | `POST /api/import` | `entity`, `records` (cantidad) |
+| `import` | `POST /api/import` | `entity`, `records`, `skipped`, `live` |
+| `import.finished` | `POST /api/import` | `entity`, `inserted`, `skipped`, `ids` (para Undo; la pantalla muestra la cantidad) |
+| `import.undone` · `import.undo_finished` | `POST /api/import/undo` | `importId`, `entity` · `removed`, `kept` |
 | `category.create` · `category.update` | `/api/categories/expense` | `name`, `type` · `id`, `changes` |

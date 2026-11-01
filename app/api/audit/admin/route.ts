@@ -39,7 +39,12 @@ export async function GET(req: NextRequest) {
   const names = new Map((tenants ?? []).map(t => [t.id, t.name]));
 
   return NextResponse.json({
-    rows: rows.map(r => ({ ...r, tenant_name: names.get(r.tenant_id) ?? null })),
+    rows: rows.map(r => ({
+      ...r,
+      // Una importación guarda miles de ids para poder deshacerla: en pantalla basta la cantidad.
+      details: Array.isArray(r.details?.ids) ? { ...r.details, ids: r.details.ids.length } : r.details,
+      tenant_name: names.get(r.tenant_id) ?? null,
+    })),
     total: count ?? 0,
     pageSize: PAGE_SIZE,
   });
