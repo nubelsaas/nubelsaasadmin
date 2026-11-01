@@ -54,6 +54,7 @@ Consecuencias:
 |---|---|---|
 | `impersonate` | `POST /api/impersonate` | `email`, `reason` |
 | `user.magic_link` · `user.invite_resend` | `POST /api/tenants/[id]/users/[userId]/resend` | `email` |
+| `user.deactivate` · `user.reactivate` · `user.make_owner` | `POST /api/tenants/[id]/users/[userId]/access` | `email`, `reason` |
 | `tenant.create` | `POST /api/tenants` | `name`, `admin_email`, `plan_id` |
 | `tenant.update` | `PATCH /api/tenants/[id]` | `changes` (flags incluidos) |
 | `tenant.export` · `tenant.export_finished` | `POST /api/tenants/[id]/export` | `reason` · `rows` (cantidad por archivo) |

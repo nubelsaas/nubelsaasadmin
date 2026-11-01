@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await assertSuperadmin();
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { email, first_name, last_name, admin_name, password, require_new } = await req.json();
+  const { email, first_name, last_name, admin_name, password, require_new, additional } = await req.json();
   if (!email) return NextResponse.json({ error: 'email is required' }, { status: 400 });
 
   const db = createAdminClient();
@@ -28,7 +28,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return perms.can_do_everything === true;
   });
 
-  if (hasAdmin) return NextResponse.json({ error: 'This tenant already has an admin user' }, { status: 409 });
+  // Si el dueño se fue y no hay más equipo, soporte agrega otro admin antes de desactivarlo.
+  if (hasAdmin && additional !== true) return NextResponse.json({ error: 'This tenant already has an admin user' }, { status: 409 });
 
   const logged = await logAdminAction(session, 'tenant.admin_create', {
     tenantId: params.id,

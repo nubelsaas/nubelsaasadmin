@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, UserPlus, ShieldCheck, ChevronDown, ChevronUp, Mail, Link2, Copy, Check } from 'lucide-react';
+import { ArrowLeft, UserPlus, ShieldCheck, ChevronDown, ChevronUp, Mail, Link2, Copy, Check, Crown, UserCheck, UserX } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
 
 type Role = { id: string; name: string; type: string };
@@ -67,11 +67,26 @@ export default function TenantUsersPage() {
 
   // ── Admin creation ──────────────────────────────────────────────
 
+  async function handleAccess(user: TenantUser, action: 'deactivate' | 'reactivate' | 'make_owner', question: string) {
+    const reason = window.prompt(question);
+    if (!reason?.trim()) return;
+
+    setAction(user.id, { status: 'loading', message: undefined, link: undefined });
+    const res = await fetch(`/api/tenants/${id}/users/${user.id}/access`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, reason }),
+    });
+    const json = await res.json();
+    setAction(user.id, res.ok ? { status: 'idle' } : { status: 'error', message: json.error ?? 'Action failed' });
+    if (res.ok) load();
+  }
+
   async function callCreateAdmin(targetEmail: string, targetName: string, targetPassword?: string) {
     const res = await fetch(`/api/tenants/${id}/admin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: targetEmail, admin_name: targetName, password: targetPassword ?? null }),
+      body: JSON.stringify({ email: targetEmail, admin_name: targetName, password: targetPassword ?? null, additional: hasAdmin }),
     });
     const json = await res.json();
     if (!res.ok) return json.error ?? 'Failed to create admin';
@@ -333,7 +348,7 @@ export default function TenantUsersPage() {
                   {expanded && (
                     <div className="border-t border-slate-100 px-4 py-3 bg-slate-50 space-y-3">
                       <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                        Registration actions
+                        Account actions
                       </p>
 
                       {/* Action buttons */}
@@ -349,6 +364,26 @@ export default function TenantUsersPage() {
                             className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
                             <Link2 size={13} /> Generate magic link
                           </button>
+                          {u.is_active && !isAdmin && (
+                            <button
+                              onClick={() => handleAccess(u, 'make_owner', `Why should ${u.email} become an owner? They get full access to this salon.`)}
+                              className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50 transition-colors">
+                              <Crown size={13} /> Make owner
+                            </button>
+                          )}
+                          {u.is_active ? (
+                            <button
+                              onClick={() => handleAccess(u, 'deactivate', `Why are you deactivating ${u.email}? They can't log in afterwards.`)}
+                              className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-rose-200 bg-white text-rose-600 px-3 py-2 hover:bg-rose-50 transition-colors">
+                              <UserX size={13} /> Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleAccess(u, 'reactivate', `Why are you reactivating ${u.email}?`)}
+                              className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50 transition-colors">
+                              <UserCheck size={13} /> Reactivate
+                            </button>
+                          )}
                         </div>
                       )}
 

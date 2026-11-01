@@ -45,6 +45,7 @@ export default function TenantDetailPage() {
 
   const [tenant,        setTenant]        = useState<Tenant | null>(null);
   const [stats,         setStats]         = useState<TenantStats | null>(null);
+  const [regionLocked,  setRegionLocked]  = useState(false);
   const [plans,         setPlans]         = useState<Plan[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [saving,        setSaving]        = useState(false);
@@ -92,6 +93,7 @@ export default function TenantDetailPage() {
         setPhonePrefix(t.phone_prefix ?? '');
         setLogoUrl(t.logo_url ?? null);
         setStats(detail.stats);
+        setRegionLocked(detail.regionLocked);
       }
       setPlans(plans as Plan[]);
       setLoading(false);
@@ -436,7 +438,8 @@ export default function TenantDetailPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Country (ISO)</label>
-                <select value={country} onChange={e => handleCountryChange(e.target.value)} className={inputCls}>
+                <select value={country} onChange={e => handleCountryChange(e.target.value)} disabled={regionLocked}
+                  className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed`}>
                   <option value="CO">🇨🇴 Colombia (CO)</option>
                   <option value="MX">🇲🇽 México (MX)</option>
                   <option value="CL">🇨🇱 Chile (CL)</option>
@@ -469,6 +472,10 @@ export default function TenantDetailPage() {
                   className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} placeholder="+57" />
               </div>
             </div>
+
+            {regionLocked && (
+              <p className="text-xs text-amber-600">Region is locked because this tenant has financial records. Changing it would corrupt its amounts and day cutoffs.</p>
+            )}
 
             {/* Plan */}
             <div className="pt-2 border-t border-slate-100">

@@ -102,6 +102,8 @@ Permite subir, reemplazar o eliminar el logo del tenant. El upload llama `POST /
 
 Todos vía `PATCH /api/tenants/[id]` (service role).
 
+**Región bloqueada:** con movimientos en `transactions`, `expenses_purchases` o `account_balance_entries`, cambiar país, moneda, zona horaria o prefijo responde `409` y el selector queda deshabilitado (`lib/regionLock.ts`). Corregirlo en un salón con datos es una operación manual, con plan de conversión.
+
 > **Este panel es la ÚNICA superficie de la configuración regional del tenant.** País, moneda, zona
 > horaria y prefijo telefónico definen la constitución del tenant (cambiar la moneda de un salón con
 > ventas históricas corrompe los importes ya registrados; la zona horaria mueve el corte de día de
@@ -183,6 +185,18 @@ Tiene dos modos seleccionables:
 | **Create manually** | Llama `createUser` con contraseña definida en el formulario → sin email, acceso inmediato |
 
 Campos: email (requerido), name (opcional), password + confirm (solo en modo manual, mín. 8 chars).
+
+### Acceso de usuarios
+
+En el panel de cada usuario, con motivo obligatorio (`POST /api/tenants/[id]/users/[userId]/access`). Requiere la migración `20261101150000_service_role_user_admin.sql` de nubelsaas: sin ella, `trg_guard_sensitive_user_fields` rechaza estos cambios.
+
+| Acción | Efecto |
+|---|---|
+| **Deactivate** | `is_active = false` y bloqueo del login. Sin el bloqueo el usuario seguiría entrando, porque la base de datos no revisa `is_active`. Un token ya emitido dura hasta que venza. Rechaza admins del portal |
+| **Reactivate** | Revierte lo anterior |
+| **Make owner** | Da `can_do_everything` y pone su email en `admin_email`. El dueño anterior conserva el acceso hasta desactivarlo |
+
+**Dueño que se va:** Make owner a otra persona y luego Deactivate. Desactivar al único dueño responde `409`. Si no hay más equipo, **Create admin** agrega otro aunque ya exista uno.
 
 ### Lista de usuarios
 
@@ -280,7 +294,7 @@ Retorna usuarios del tenant con rol:
 Crea usuario admin para un tenant existente. Acepta `{ email, admin_name?, password? }`.
 - Sin `password`: flujo invite (email de Supabase)
 - Con `password`: crea usuario directamente con `email_confirm: true`
-- Rechaza con 409 si ya existe un usuario con `can_do_everything: true`
+- Rechaza con 409 si ya existe un usuario con `can_do_everything: true`, salvo con `additional: true`
 
 ### `POST /api/tenants/[id]/users/[userId]/resend`
 Acciones de registro para un usuario existente. Acepta `{ action: 'invite' | 'magic_link' }`:
@@ -347,6 +361,8 @@ La tabla `tenants` **no tiene**: `is_active`, `slug`, `contact_email`, `plan` (t
 | `app/api/tenants/route.ts` | GET lista · POST crear tenant (+admin) |
 | `app/api/tenants/[id]/route.ts` | GET detalle+stats · PATCH campos · DELETE tenant vacío |
 | `app/api/tenants/[id]/users/route.ts` | GET usuarios con roles |
+| `app/api/tenants/[id]/users/[userId]/access/route.ts` | POST desactivar · reactivar · hacer dueño |
+| `lib/regionLock.ts` | Bloqueo de región con movimientos |
 | `app/api/tenants/[id]/export/route.ts` | POST exportar datos del tenant |
 | `lib/tenantExport.ts` | Lista permitida, CSV y ZIP |
 | `app/api/tenants/[id]/suspension/route.ts` | POST suspender · reactivar |

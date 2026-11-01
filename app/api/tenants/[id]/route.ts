@@ -4,13 +4,15 @@ import { assertSuperadmin } from '@/lib/assertSuperadmin';
 import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
 import { findTargetData } from '@/lib/cloneTarget';
 import { EMPTY_TENANT_TABLES, findTablesWithRows } from '@/lib/tenantTables';
+import { changedRegionFields, hasFinancialHistory } from '@/lib/regionLock';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const db = createAdminClient();
-  const [{ data: tenant }, { count: activeUsers }, { count: branches }, { data: lastSaleData }, { count: customers }] = await Promise.all([
+  const [{ data: tenant }, regionLocked, { count: activeUsers }, { count: branches }, { data: lastSaleData }, { count: customers }] = await Promise.all([
     db.from('tenants').select('id, name, admin_email, phone, city, country_iso, currency_code, timezone, plan_id, feature_overrides, settings, logo_url, suspended_at, created_at').eq('id', params.id).single(),
+    hasFinancialHistory(db, params.id).catch(() => true),
     db.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', params.id).eq('is_active', true),
     db.from('branches').select('id', { count: 'exact', head: true }).eq('tenant_id', params.id).eq('is_active', true),
     db.from('transactions').select('date_time').eq('tenant_id', params.id).order('date_time', { ascending: false }).limit(1),
@@ -20,6 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!tenant) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({
     tenant,
+    regionLocked,
     stats: { activeUsers: activeUsers ?? 0, branches: branches ?? 0, lastSale: lastSaleData?.[0]?.date_time ?? null, customers: customers ?? 0 },
   });
 }
@@ -38,10 +41,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (Object.keys(update).length === 0)
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
 
+  const db = createAdminClient();
+
+  const { data: current } = await db.from('tenants').select('country_iso, currency_code, timezone, phone_prefix').eq('id', params.id).single();
+  if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const changedRegion = changedRegionFields(current, update);
+  if (changedRegion.length > 0) {
+    try {
+      if (await hasFinancialHistory(db, params.id)) {
+        return NextResponse.json({ error: `This tenant has financial records, so ${changedRegion.join(', ')} can't change.` }, { status: 409 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Could not verify the financial history. Nothing was changed.' }, { status: 500 });
+    }
+  }
+
   const logged = await logAdminAction(session, 'tenant.update', { tenantId: params.id, details: { changes: update } });
   if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
-  const db = createAdminClient();
   const { error } = await db.from('tenants').update(update).eq('id', params.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

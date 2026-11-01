@@ -85,6 +85,7 @@ Rutas ya creadas:
 - `DELETE /api/tenants/[id]` — borrar tenant vacío y sus logins
 - `POST /api/tenants/[id]/suspension` — suspender o reactivar (requiere `reason`)
 - `POST /api/tenants/[id]/export` — descargar ZIP con los datos del tenant (requiere `reason`)
+- `POST /api/tenants/[id]/users/[userId]/access` — desactivar, reactivar o hacer dueño (requiere `reason`)
 - `POST /api/impersonate` — generar magic link (requiere `reason`)
 - `POST /api/clone/stream` — SSE clone progress
 
