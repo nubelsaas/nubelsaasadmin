@@ -18,6 +18,7 @@ export type TenantHealth = {
   suspended: boolean;
   auditOff: boolean;
   hasOwner: boolean;
+  contactIssue: 'missing' | 'inactive' | null;
   lastSale: string | null;
   sales30: number;
   revenue30: number;
@@ -61,7 +62,7 @@ export async function loadTenantHealth(db: SupabaseClient, now = Date.now()): Pr
   const since60 = new Date(now - 60 * DAY_MS).toISOString();
 
   const [{ data: tenants, error }, { data: plans }, sales, appointments, users] = await Promise.all([
-    db.from('tenants').select('id, name, currency_code, plan_id, suspended_at, is_audit_enabled').order('name'),
+    db.from('tenants').select('id, name, currency_code, plan_id, suspended_at, is_audit_enabled, admin_email').order('name'),
     db.from('subscription_plans').select('id, name, monthly_price'),
     readAll<{ tenant_id: string; date_time: string; total_sale_price: number }>(() =>
       db.from('transactions').select('tenant_id, date_time, total_sale_price', { count: 'exact' })
@@ -70,8 +71,8 @@ export async function loadTenantHealth(db: SupabaseClient, now = Date.now()): Pr
       db.from('appointments').select('tenant_id', { count: 'exact' })
         .gte('start_time', since30).lte('start_time', new Date(now).toISOString())
         .not('status', 'in', '(cancelled,no_show)').order('id')),
-    readAll<{ tenant_id: string; permissions: unknown }>(() =>
-      db.from('users').select('tenant_id, permissions', { count: 'exact' }).eq('is_active', true).order('id')),
+    readAll<{ tenant_id: string; permissions: unknown; email: string | null; is_active: boolean | null }>(() =>
+      db.from('users').select('tenant_id, permissions, email, is_active', { count: 'exact' }).order('id')),
   ]);
   if (error || !tenants) throw new Error(error?.message ?? 'Could not read tenants');
 
@@ -85,7 +86,10 @@ export async function loadTenantHealth(db: SupabaseClient, now = Date.now()): Pr
     const own = sales.filter(s => s.tenant_id === t.id);
     const sum = (rows: typeof own) => rows.reduce((total, s) => total + Number(s.total_sale_price || 0), 0);
     const last30 = own.filter(s => s.date_time >= since30);
-    const staff = users.filter(u => u.tenant_id === t.id);
+    const everyone = users.filter(u => u.tenant_id === t.id);
+    const staff = everyone.filter(u => u.is_active !== false);
+    const contact = t.admin_email?.toLowerCase();
+    const contactUser = everyone.find(u => u.email?.toLowerCase() === contact);
     const health = {
       id: t.id,
       name: t.name,
@@ -98,6 +102,8 @@ export async function loadTenantHealth(db: SupabaseClient, now = Date.now()): Pr
         const perms = typeof u.permissions === 'string' ? JSON.parse(u.permissions) : (u.permissions ?? {});
         return perms.can_do_everything === true;
       }),
+      // El contacto puede ser un correo externo (info@salon.co): solo se avisa si falta o si es de alguien desactivado.
+      contactIssue: !contact ? 'missing' as const : contactUser?.is_active === false ? 'inactive' as const : null,
       lastSale: lastSales[i].data?.[0]?.date_time ?? null,
       sales30: last30.length,
       revenue30: sum(last30),
@@ -143,6 +149,8 @@ export async function loadAlerts(db: SupabaseClient, health: TenantHealth[], now
   for (const h of health) {
     if (h.auditOff) alerts.push({ severity: 'high', tenantId: h.id, tenantName: h.name, message: 'Audit log is turned off.' });
     if (!h.hasOwner && !h.suspended) alerts.push({ severity: 'high', tenantId: h.id, tenantName: h.name, message: 'No active owner: nobody in the salon can manage it.' });
+    if (h.contactIssue === 'missing') alerts.push({ severity: 'info', tenantId: h.id, tenantName: h.name, message: 'No contact email: cash alerts are not sent.' });
+    if (h.contactIssue === 'inactive') alerts.push({ severity: 'high', tenantId: h.id, tenantName: h.name, message: 'Contact email belongs to a deactivated user: cash alerts still go to them.' });
     if (h.status === 'quiet') alerts.push({ severity: 'info', tenantId: h.id, tenantName: h.name, message: `No sales in more than ${QUIET_DAYS} days.` });
     if (h.status === 'declining') alerts.push({ severity: 'info', tenantId: h.id, tenantName: h.name, message: 'Revenue in the last 30 days fell by more than half.' });
     if (h.suspended) alerts.push({ severity: 'info', tenantId: h.id, tenantName: h.name, message: 'Suspended.' });

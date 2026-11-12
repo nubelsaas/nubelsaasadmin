@@ -33,6 +33,8 @@ Lista calculada al abrir el dashboard (`lib/tenantHealth.ts` → `loadAlerts`; r
 | Muchas impersonaciones | Alto | Un admin con `IMPERSONATION_LIMIT` (5) o más en 24 horas |
 | Audit log apagado | Alto | `is_audit_enabled = false` |
 | Sin dueño activo | Alto | Ningún usuario activo con `can_do_everything`, salvo suspendidos |
+| Contacto de un usuario desactivado | Alto | `admin_email` es de un usuario con `is_active = false`: las alertas de caja le siguen llegando |
+| Sin correo de contacto | Info | `admin_email` vacío: no salen las alertas de caja |
 | Salón callado | Info | Sin ventas en más de `QUIET_DAYS` (14) días, si alguna vez vendió |
 | Ingresos en caída | Info | Los últimos 30 días están por debajo de la mitad de los 30 anteriores |
 | Suspendido | Info | `suspended_at` no nulo |

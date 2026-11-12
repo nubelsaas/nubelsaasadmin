@@ -23,7 +23,7 @@ Gestión completa de tenants: listado con búsqueda, creación de nuevos tenants
 | Campo | Descripción |
 |---|---|
 | `name` | Nombre del tenant |
-| `admin_email` | Email del administrador principal |
+| `admin_email` | Correo de contacto del salón (ver abajo) |
 | `created_at` | Fecha formateada en inglés |
 | `country_iso` | Usado para la agrupación |
 
@@ -194,9 +194,21 @@ En el panel de cada usuario, con motivo obligatorio (`POST /api/tenants/[id]/use
 |---|---|
 | **Deactivate** | `is_active = false` y bloqueo del login. Sin el bloqueo el usuario seguiría entrando, porque la base de datos no revisa `is_active`. Un token ya emitido dura hasta que venza. Rechaza admins del portal |
 | **Reactivate** | Revierte lo anterior |
-| **Make owner** | Da `can_do_everything` y pone su email en `admin_email`. El dueño anterior conserva el acceso hasta desactivarlo |
+| **Make owner** | Da `can_do_everything`. No cambia `admin_email`. El dueño anterior conserva el acceso hasta desactivarlo |
 
 **Dueño que se va:** Make owner a otra persona y luego Deactivate. Desactivar al único dueño responde `409`. Si no hay más equipo, **Create admin** agrega otro aunque ya exista uno.
+
+**Desactivar al contacto:** si el usuario desactivado es el `admin_email`, el contacto pasa a otro dueño activo.
+
+### `admin_email` es el correo de contacto, no el login
+
+En el app principal es el destino de las alertas de caja (`cash-alerts`) y el organizador de las invitaciones de citas, y el salón lo edita en Configuración. Puede ser un correo externo, como `info@salon.co`. El portal no lo usa para identificar al dueño: el dueño es quien tiene `can_do_everything`. Al crear un tenant se usa el email del admin como contacto inicial.
+
+El dashboard avisa si falta (no salen las alertas de caja) o si es de un usuario desactivado.
+
+### Un email, un salón
+
+`users.email` es único en toda la base, así que un email solo puede pertenecer a un salón. Crear un admin con un email que ya está en otro salón responde `409` con el nombre de ese salón, antes de crear el rol o enviar la invitación. El cambio de fondo es del app principal: `nubelsaas/docs/plans/multi_tenant_user_membership_plan.md`.
 
 ### Lista de usuarios
 

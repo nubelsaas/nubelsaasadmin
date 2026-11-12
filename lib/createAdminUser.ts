@@ -15,6 +15,7 @@ interface Options {
 interface Result {
   ok: boolean;
   error?: string;
+  conflict?: boolean;   // el email ya pertenece a otro tenant
   roleId?: string;
   userId?: string;
 }
@@ -32,6 +33,26 @@ export async function createAdminUserForTenant({ tenantId, email, adminName = ''
     if (taken) {
       return { ok: false, error: `El email ${email} ya está registrado como usuario. Usa un email nuevo para el administrador del clon.` };
     }
+  }
+
+  // users.email es único en toda la base: un email solo puede pertenecer a un salón. Se avisa antes de
+  // crear el rol o enviar una invitación, con el nombre del salón, en vez del error de duplicado.
+  const { data: existingUser, error: existingError } = await db
+    .from('users').select('tenant_id')
+    .ilike('email', email.trim().replace(/[\\%_]/g, '\\$&'))   // ilike sin comodines: "_" es común en emails
+    .limit(1).maybeSingle();
+  if (existingError) return { ok: false, error: `User lookup failed: ${existingError.message}` };
+  if (existingUser) {
+    const { data: owner } = await db.from('tenants').select('name').eq('id', existingUser.tenant_id).maybeSingle();
+    const salon = owner?.name ?? 'another salon';
+    const sameTenant = existingUser.tenant_id === tenantId;
+    return {
+      ok: false,
+      conflict: true,
+      error: sameTenant
+        ? `${email} is already a user of this salon. Use Make owner instead.`
+        : `${email} already belongs to "${salon}". For now one email can only belong to one salon.`,
+    };
   }
 
   const nameParts = adminName.trim().split(/\s+/);
@@ -119,9 +140,7 @@ export async function createAdminUserForTenant({ tenantId, email, adminName = ''
     return { ok: false, error: `User creation failed: ${userError.message}` };
   }
 
-  // 4. Record this admin as the tenant's admin_email when none is set yet.
-  // The clone rollback and check-target use tenants.admin_email to identify the
-  // real admin to preserve / exclude, so the new superadmin must be registered there.
+  // 4. Si el salón no tiene correo de contacto (admin_email), usa el de su admin.
   await db.from('tenants').update({ admin_email: email }).eq('id', tenantId).is('admin_email', null);
 
   return { ok: true, roleId, userId: authUserId };

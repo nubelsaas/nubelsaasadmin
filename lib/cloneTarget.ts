@@ -1,6 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const EMPTINESS_CHECK_TABLES = ['branches', 'users', 'products_services', 'sales', 'customers', 'payment_accounts'] as const;
+const EMPTINESS_CHECK_TABLES = ['branches', 'products_services', 'sales', 'customers', 'payment_accounts'] as const;
+
+const isSuperadmin = (permissions: unknown) => {
+  const perms = typeof permissions === 'string' ? JSON.parse(permissions) : (permissions ?? {});
+  return perms.can_do_everything === true;
+};
+
+/**
+ * Un tenant vacío tiene como mucho un usuario, y es un superadmin: el que crea POST /api/tenants.
+ * Es el mismo criterio del rollback, que conserva exactamente un superadmin. No usa admin_email:
+ * ese es el correo de contacto del salón y puede no ser de ningún usuario.
+ */
+export function hasExtraUsers(users: { permissions: unknown }[]) {
+  return users.length > 1 || (users.length === 1 && !isSuperadmin(users[0].permissions));
+}
 
 /**
  * Email del superadmin que ya tiene el tenant, o null si no tiene. Todo tenant nace con uno
@@ -10,10 +24,7 @@ export async function findTenantSuperadmin(db: SupabaseClient, tenantId: string)
   const { data, error } = await db.from('users').select('email, permissions').eq('tenant_id', tenantId);
   if (error) throw new Error(`Could not read users of tenant ${tenantId}`);
 
-  const admin = (data ?? []).find(u => {
-    const perms = typeof u.permissions === 'string' ? JSON.parse(u.permissions) : (u.permissions ?? {});
-    return perms.can_do_everything === true;
-  });
+  const admin = (data ?? []).find(u => isSuperadmin(u.permissions));
   return admin ? admin.email : null;
 }
 
@@ -23,25 +34,22 @@ export async function findTenantSuperadmin(db: SupabaseClient, tenantId: string)
  * porque si el clone falla el rollback automático borra todo el contenido del destino.
  */
 export async function findTargetData(db: SupabaseClient, tenantId: string): Promise<string[]> {
-  const { data: tenant, error: tenantError } = await db
-    .from('tenants')
-    .select('admin_email')
-    .eq('id', tenantId)
-    .single();
+  const { data: tenant, error: tenantError } = await db.from('tenants').select('id').eq('id', tenantId).single();
   if (tenantError || !tenant) throw new Error(`Tenant not found: ${tenantId}`);
 
-  const checks = await Promise.all(
-    EMPTINESS_CHECK_TABLES.map(table => {
-      let query = db.from(table).select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId);
-      if (table === 'users' && tenant.admin_email) {
-        query = query.neq('email', tenant.admin_email);
-      }
-      return query;
-    })
-  );
+  const [users, ...checks] = await Promise.all([
+    db.from('users').select('permissions').eq('tenant_id', tenantId),
+    ...EMPTINESS_CHECK_TABLES.map(table =>
+      db.from(table).select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId)
+    ),
+  ]);
 
+  if (users.error) throw new Error('Could not verify users on target tenant');
   const failed = EMPTINESS_CHECK_TABLES.find((_, i) => checks[i].error);
   if (failed) throw new Error(`Could not verify ${failed} on target tenant`);
 
-  return EMPTINESS_CHECK_TABLES.filter((_, i) => (checks[i].count ?? 0) > 0);
+  return [
+    ...(hasExtraUsers(users.data ?? []) ? ['users'] : []),
+    ...EMPTINESS_CHECK_TABLES.filter((_, i) => (checks[i].count ?? 0) > 0),
+  ];
 }

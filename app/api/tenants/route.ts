@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     await db.from('tenants').delete().eq('id', tenantId);
     return NextResponse.json(
       { error: `No se pudo crear el administrador del tenant: ${result.error ?? 'error desconocido'}` },
-      { status: 500 },
+      { status: result.conflict ? 409 : 500 },
     );
   }
 

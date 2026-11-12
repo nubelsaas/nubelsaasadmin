@@ -201,17 +201,18 @@ Cada tabla se borra con `DELETE WHERE tenant_id = targetId`. El registro del ten
 La BD de nubelsaas tiene un trigger que **aborta** cualquier borrado/actualización que deje al tenant **sin superadmin activo** mientras el tenant exista (sin bypass de sesión). Un `DELETE FROM users` masivo abortaría entero si intentara borrar al último superadmin.
 
 Por eso el rollback **conserva exactamente un guardián**:
-1. Preferentemente el **admin real** (usuario con `email = tenants.admin_email` que sea superadmin activo).
+1. Preferentemente el superadmin activo cuyo email coincide con `tenants.admin_email`, el correo de contacto.
 2. Si no existe (p. ej. un Demo Seed viejo cuyo `admin_email` no matchea a nadie), conserva **cualquier** superadmin activo y emite `⚠️` indicando que para vaciar del todo hay que **borrar el tenant** (el cascade desde `tenants` sí está exento del guard).
 
-> El superadmin que crea el flujo de clone queda registrado en `tenants.admin_email`, así que en clones nuevos el rollback siempre preserva al admin real y elimina todo el resto (incluidos los staff demo con `can_do_everything`).
+> Como el destino solo puede tener un usuario y debe ser superadmin (`hasExtraUsers`), el rollback siempre conserva a ese mismo usuario. Además, el superadmin que crea el flujo de clone queda registrado en `tenants.admin_email`, así que en clones nuevos el rollback siempre preserva al admin real y elimina todo el resto (incluidos los staff demo con `can_do_everything`).
 
 ---
 
 ## Validación del tenant destino
 
 Antes de iniciar cualquier clone se verifica que el tenant destino esté completamente vacío consultando (`lib/cloneTarget.ts`):
-- `branches` · `users` · `products_services` · `sales` · `customers` · `payment_accounts`
+- `branches` · `products_services` · `sales` · `customers` · `payment_accounts`
+- `users`: como mucho uno, y debe ser superadmin (`hasExtraUsers`). No depende de `admin_email`, que es el correo de contacto del salón.
 
 La UI lo usa para dar feedback (`check-target`), pero **la autoridad es el servidor**: `POST /api/clone/stream` repite el chequeo antes de abrir el stream y responde 409 si hay datos. Si el chequeo no se puede completar, el clone se bloquea (500); nunca se asume vacío, porque un fallo del clone dispara el rollback automático sobre el destino.
 

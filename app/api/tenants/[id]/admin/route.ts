@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   if (!result.ok) {
     // require_new rejections are caller errors (email taken), not server faults.
-    const status = result.error?.includes('ya está registrado') ? 409 : 500;
+    const status = result.conflict || result.error?.includes('ya está registrado') ? 409 : 500;
     return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json({ ok: true, userId: result.userId, roleId: result.roleId }, { status: 201 });
