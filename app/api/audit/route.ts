@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
+import { AUDIT_FAILED, logAdminView } from '@/lib/adminAudit';
 
 const PAGE_SIZE = 50;
 
 export async function GET(req: NextRequest) {
-  if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const tenantId  = searchParams.get('tenantId')  ?? null;
@@ -14,6 +16,8 @@ export async function GET(req: NextRequest) {
   const from      = searchParams.get('from')      ?? null;
   const to        = searchParams.get('to')        ?? null;
   const page      = Math.max(0, parseInt(searchParams.get('page') ?? '0'));
+
+  if (!await logAdminView(session, 'view.activity', tenantId)) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
   const db = createAdminClient();
 

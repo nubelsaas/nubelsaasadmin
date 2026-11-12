@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   const from     = searchParams.get('from')     ?? null;
   const to       = searchParams.get('to')       ?? null;
   const page     = Math.max(0, parseInt(searchParams.get('page') ?? '0'));
+  const views    = searchParams.get('views') === '1';
 
   const db = createAdminClient();
 
@@ -24,6 +25,8 @@ export async function GET(req: NextRequest) {
 
   if (tenantId) q = q.eq('tenant_id', tenantId);
   if (action)   q = q.ilike('action', `%${action}%`);
+  // Las vistas son muchas y rutinarias: se muestran solo si se piden o se filtra por acción.
+  if (!views && !action) q = q.not('action', 'like', 'view.%');
   if (from)     q = q.gte('created_at', from);
   if (to)       q = q.lte('created_at', to + 'T23:59:59Z');
 

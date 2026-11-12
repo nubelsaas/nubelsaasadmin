@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
-import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
+import { AUDIT_FAILED, logAdminAction, logAdminView } from '@/lib/adminAudit';
 import { findTargetData } from '@/lib/cloneTarget';
 import { EMPTY_TENANT_TABLES, findTablesWithRows } from '@/lib/tenantTables';
 import { changedRegionFields, hasFinancialHistory } from '@/lib/regionLock';
 import { applyJsonChanges, isJsonChanges } from '@/lib/jsonChanges';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!await logAdminView(session, 'view.tenant', params.id)) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
   const db = createAdminClient();
   const [{ data: tenant }, regionLocked, { count: activeUsers }, { count: branches }, { data: lastSaleData }, { count: customers }] = await Promise.all([

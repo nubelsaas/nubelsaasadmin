@@ -39,6 +39,7 @@ function AuditContent() {
   const [searchingTenant, setSearchingTenant] = useState(false);
   const [tenantOpen,    setTenantOpen]    = useState(false);
   const [actionFilter,  setActionFilter]  = useState('');
+  const [includeViews,  setIncludeViews]  = useState(false);
   const [tableFilter,   setTableFilter]   = useState('');
   const [fromDate,      setFromDate]      = useState('');
   const [toDate,        setToDate]        = useState('');
@@ -83,6 +84,7 @@ function AuditContent() {
     const params = new URLSearchParams({ page: String(page) });
     if (tenantFilter) params.set('tenantId', tenantFilter.id);
     if (actionFilter) params.set('action',   actionFilter);
+    if (includeViews && view === 'admin') params.set('views', '1');
     if (tableFilter && view === 'tenant') params.set('table', tableFilter);
     if (fromDate)     params.set('from',     fromDate);
     if (toDate)       params.set('to',       toDate);
@@ -94,7 +96,7 @@ function AuditContent() {
     setTotal(json.total ?? 0);
     setPageSize(json.pageSize ?? 50);
     setLoading(false);
-  }, [view, page, tenantFilter, actionFilter, tableFilter, fromDate, toDate]);
+  }, [view, page, tenantFilter, actionFilter, includeViews, tableFilter, fromDate, toDate]);
 
   useEffect(() => { loadAudit(); }, [loadAudit]);
 
@@ -171,6 +173,13 @@ function AuditContent() {
             <input type="text" placeholder={view === 'admin' ? 'Action (e.g. impersonate)' : 'Action (e.g. INSERT)'} value={actionFilter}
               onChange={e => { setActionFilter(e.target.value); setPage(0); }}
               className={inputCls} />
+
+            {view === 'admin' && (
+              <label className="flex items-center gap-2 text-xs text-slate-600 px-1">
+                <input type="checkbox" checked={includeViews} onChange={e => { setIncludeViews(e.target.checked); setPage(0); }} className="rounded accent-indigo-600" />
+                Include views
+              </label>
+            )}
 
             {view === 'tenant' && (
               <input type="text" placeholder="Table name" value={tableFilter}

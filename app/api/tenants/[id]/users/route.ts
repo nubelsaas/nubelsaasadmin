@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
+import { AUDIT_FAILED, logAdminView } from '@/lib/adminAudit';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const session = await assertSuperadmin();
+  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!await logAdminView(session, 'view.staff', params.id)) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
   const { data, error } = await createAdminClient()
     .from('users')

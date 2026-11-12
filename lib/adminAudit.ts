@@ -3,7 +3,10 @@ import { createAdminClient } from '@/lib/supabaseAdmin';
 
 export const AUDIT_FAILED = 'Could not write the audit log. The action was not performed.';
 
+export type AdminView = 'view.tenant' | 'view.staff' | 'view.activity';
+
 export type AdminAction =
+  | AdminView
   | 'impersonate'
   | 'user.magic_link'
   | 'user.invite_resend'
@@ -51,4 +54,33 @@ export async function logAdminAction(
   });
   if (error) console.error(`[admin-audit] ${action}: ${error.message}`);
   return !error;
+}
+
+const VIEW_THROTTLE_MS = 60 * 60 * 1000;
+
+/**
+ * Registra que un admin vio datos de un salón, como mucho una vez por hora por admin, vista y
+ * salón: así queda quién miró sin llenar el log con cada recarga. Si devuelve false, la ruta no
+ * debe devolver los datos, igual que con las escrituras.
+ */
+export async function logAdminView(
+  session: Pick<Session, 'user'>,
+  action: AdminView,
+  tenantId: string | null,
+): Promise<boolean> {
+  let recent = createAdminClient()
+    .from('admin_audit_logs')
+    .select('id')
+    .eq('admin_user_id', session.user.id)
+    .eq('action', action)
+    .gte('created_at', new Date(Date.now() - VIEW_THROTTLE_MS).toISOString())
+    .limit(1);
+  recent = tenantId ? recent.eq('tenant_id', tenantId) : recent.is('tenant_id', null);
+
+  const { data, error } = await recent;
+  if (error) {
+    console.error(`[admin-audit] ${action}: ${error.message}`);
+    return false;
+  }
+  return data.length > 0 || logAdminAction(session, action, { tenantId });
 }

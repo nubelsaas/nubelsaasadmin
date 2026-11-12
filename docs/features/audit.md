@@ -48,10 +48,20 @@ Consecuencias:
 
 ---
 
+## Lecturas
+
+Ver datos de un salón también queda registrado (`logAdminView`): el detalle, el equipo con sus emails y permisos, y su actividad. La exportación ya registra `tenant.export`.
+
+- Una vez por hora como mucho, por admin, vista y salón: recargar no llena el log.
+- Si no se puede registrar, la ruta no devuelve los datos (`500`), igual que con las escrituras.
+- **Admin actions** las oculta por defecto. Se ven con **Include views** o filtrando por acción.
+- No se registran el listado de tenants, el dashboard ni los planes: no muestran datos de un salón en particular.
+
 ## Acciones registradas
 
 | Acción | Ruta | `details` |
 |---|---|---|
+| `view.tenant` · `view.staff` · `view.activity` | `GET /api/tenants/[id]` · `GET /api/tenants/[id]/users` · `GET /api/audit` | — (el salón va en `tenant_id`; `null` si se miró la actividad de todos) |
 | `impersonate` | `POST /api/impersonate` | `email`, `reason` |
 | `user.magic_link` · `user.invite_resend` | `POST /api/tenants/[id]/users/[userId]/resend` | `email` |
 | `user.deactivate` · `user.reactivate` · `user.make_owner` | `POST /api/tenants/[id]/users/[userId]/access` | `email`, `reason` |
