@@ -23,6 +23,30 @@ Tres tarjetas en la parte superior:
 | New this month | COUNT donde `created_at >= inicio del mes actual` | Query con `.gte` |
 | Countries | Número de países únicos (distinct `country_iso`) | Calculado en servidor |
 
+### Needs attention
+
+Lista calculada al abrir el dashboard (`lib/tenantHealth.ts` → `loadAlerts`; reglas de estado en `lib/healthStatus.ts`). El portal no envía avisos por correo ni por otro canal: hay que abrirlo.
+
+| Aviso | Nivel | Regla |
+|---|---|---|
+| Clone o Undo sin terminar | Alto | `getCloneRun` en estado interrumpido, revisado en tenants con clones de los últimos 30 días |
+| Muchas impersonaciones | Alto | Un admin con `IMPERSONATION_LIMIT` (5) o más en 24 horas |
+| Audit log apagado | Alto | `is_audit_enabled = false` |
+| Sin dueño activo | Alto | Ningún usuario activo con `can_do_everything`, salvo suspendidos |
+| Salón callado | Info | Sin ventas en más de `QUIET_DAYS` (14) días, si alguna vez vendió |
+| Ingresos en caída | Info | Los últimos 30 días están por debajo de la mitad de los 30 anteriores |
+| Suspendido | Info | `suspended_at` no nulo |
+
+### Salon health
+
+Tabla por salón con los últimos 30 días: última venta, ventas, ingresos frente a los 30 días anteriores, citas, staff activo y plan. Las barras muestran los ingresos de los últimos 6 meses, por mes UTC.
+
+- Ventas desde `transactions`, sin `voided`. Citas sin `cancelled` ni `no_show`.
+- Ingresos en la moneda de cada salón, sin convertir.
+- **Est. monthly value** suma el `monthly_price` del plan de los salones no suspendidos. Es un estimado: no hay datos de cobro.
+- Lee todas las filas o muestra un error en vez de totales incompletos. Si falla, el resto del dashboard se muestra igual.
+- Requiere la columna `suspended_at` (migración de suspensión de nubelsaas).
+
 ### Tenants agrupados por país
 - Los tenants se agrupan por `country_iso` usando `reduce` en el servidor
 - Cada grupo muestra el emoji de la bandera, el código ISO y el conteo de tenants
