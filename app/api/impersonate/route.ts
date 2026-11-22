@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
 import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
+import { openSupportSession } from '@/lib/impersonation';
 
 export async function POST(req: NextRequest) {
   const session = await assertSuperadmin();
@@ -25,15 +26,15 @@ export async function POST(req: NextRequest) {
   const logged = await logAdminAction(session, 'impersonate', { tenantId: user.tenant_id, details: { email, reason: reason.trim() } });
   if (!logged) return NextResponse.json({ error: AUDIT_FAILED }, { status: 500 });
 
-  const { data, error } = await db.auth.admin.generateLink({
-    type: 'magiclink',
+  // Lo que el admin haga en esta sesión queda en audit_log del app con impersonated_by.
+  const opened = await openSupportSession(db, {
     email,
-    options: {
-      redirectTo: process.env.MAIN_APP_URL ?? 'https://app.nubel.tech',
-    },
+    tenantId: user.tenant_id,
+    reason: reason.trim(),
+    admin: { id: session.user.id, email: session.user.email ?? '' },
+    appUrl: process.env.MAIN_APP_URL ?? 'https://app.nubel.tech',
   });
+  if ('error' in opened) return NextResponse.json({ error: opened.error }, { status: 500 });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ link: data.properties?.action_link });
+  return NextResponse.json({ link: opened.link, expiresAt: opened.expiresAt });
 }

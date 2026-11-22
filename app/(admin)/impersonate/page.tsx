@@ -99,8 +99,11 @@ export default function ImpersonatePage() {
 
               {link && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-3">
-                  <p className="text-sm font-semibold text-emerald-800">Magic link generated</p>
-                  <p className="text-xs font-mono text-emerald-700 break-all">{link}</p>
+                  <p className="text-sm font-semibold text-emerald-800">Support session ready</p>
+                  <p className="text-xs text-emerald-700">
+                    Everything you do in this session is logged in the salon&apos;s audit log as Nubel support, under your name.
+                    The link signs in directly for about an hour: open it yourself and don&apos;t share it.
+                  </p>
                   <div className="flex gap-2">
                     <button onClick={copyLink}
                       className="flex items-center gap-1.5 text-xs rounded-full border border-emerald-300 px-3 py-1.5 text-emerald-700 font-medium">

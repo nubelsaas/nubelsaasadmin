@@ -10,6 +10,7 @@ No corren en CI ni con `npm test` (solo toma `tests/*.test.mjs`).
 | `health-e2e.mjs` | Salud de salones y avisos del dashboard (`lib/tenantHealth.ts`) | Sí (dashboard) |
 | `views-e2e.mjs` | Registro de lecturas (`logAdminView`) | Sí |
 | `contact-e2e.mjs` | Riesgos 29 y 30: email de contacto y un email por salón | Sí |
+| `impersonate-e2e.mjs` | Sesión de soporte marcada en `audit_log` (`impersonated_by`). Necesita `audit_impersonation.sql` de nubelsaas en DEV | Sí |
 
 ```bash
 npm run dev    # en otra terminal: portal DEV en http://localhost:3003
@@ -17,6 +18,7 @@ npm run dev    # en otra terminal: portal DEV en http://localhost:3003
 node --env-file=.env.dev.local --import ./tests/e2e/alias-loader.mjs tests/e2e/health-e2e.mjs
 node --env-file=.env.dev.local tests/e2e/views-e2e.mjs
 node --env-file=.env.dev.local tests/e2e/contact-e2e.mjs
+node --env-file=.env.dev.local tests/e2e/impersonate-e2e.mjs
 ```
 
 `alias-loader.mjs` resuelve `@/…` e imports `.ts` sin extensión como lo hace Next; solo lo necesita `health-e2e.mjs`.
