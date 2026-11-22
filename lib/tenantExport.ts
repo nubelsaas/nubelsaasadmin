@@ -15,7 +15,8 @@ export type ExportSpec = {
 // Lista permitida: una tabla o columna nueva no sale hasta que alguien la revise.
 // Fuera a propósito: pos_pin, payout_details, documentos del staff, permisos, tokens, códigos de
 // autorización de pagos, audit logs, trazas del asistente y chats de soporte.
-// Toda columna debe existir en PROD y en DEV: `sales` difiere entre las dos bases.
+// Toda columna debe existir en PROD y en DEV. Estado, sede y fecha de una venta viven en
+// `transactions`, no en `sales`.
 export const EXPORT_SPECS: ExportSpec[] = [
   {
     file: 'empresa', table: 'tenants', idColumn: 'tenant_id', description: 'Datos del negocio',
