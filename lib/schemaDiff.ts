@@ -62,7 +62,6 @@ export function diffSnapshots(here: SchemaSnapshot, there: SchemaSnapshot): Diff
   const out: DiffItem[] = [];
 
   const tablesHere = Object.keys(here.tables);
-  const tablesThere = Object.keys(there.tables);
   // La API mezcla tablas y vistas: contra ella, las vistas del catálogo cuentan como tablas.
   const asApi = (s: SchemaSnapshot) => (full || s.source === 'api' ? Object.keys(s.tables) : [...Object.keys(s.tables), ...s.views]);
   out.push(...compareBy('table', asApi(here), asApi(there), t => t, () => null));
