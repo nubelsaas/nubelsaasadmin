@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Search, ExternalLink, Copy, Check, UserCog } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
-
+import { useAskDialog } from '@/components/shared/AskDialog';
 
 type Tenant = { id: string; name: string };
 type TenantUser = { id: string; email: string | null; full_name: string | null; is_active: boolean };
@@ -17,6 +17,8 @@ export default function ImpersonatePage() {
   const [link, setLink] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { ask, dialog } = useAskDialog();
 
   const loadTenants = useCallback(async () => {
     setLoadingTenants(true);
@@ -30,6 +32,7 @@ export default function ImpersonatePage() {
   async function selectTenant(t: Tenant) {
     setSelectedTenant(t);
     setLink(null);
+    setError(null);
     setUsers([]);
     setLoadingUsers(true);
     const res = await fetch(`/api/tenants/${t.id}/users`);
@@ -39,10 +42,16 @@ export default function ImpersonatePage() {
 
   async function handleImpersonate(user: TenantUser) {
     if (!user.email) return;
-    const reason = window.prompt(`Why do you need to sign in as ${user.email}?`);
-    if (!reason?.trim()) return;
+    const reason = await ask({
+      title: `Sign in as ${user.email}?`,
+      message: "You'll act as this user in the salon. Everything you do is recorded as Nubel support, under your name.",
+      confirmLabel: 'Open support session',
+      placeholder: 'e.g. The owner can\'t find last week\'s cash closing',
+    });
+    if (!reason) return;
     setGenerating(user.id);
     setLink(null);
+    setError(null);
     const res = await fetch('/api/impersonate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -51,7 +60,7 @@ export default function ImpersonatePage() {
     const json = await res.json();
     setGenerating(null);
     if (json.link) setLink(json.link);
-    else alert(json.error ?? 'Failed to generate link');
+    else setError(json.error ?? 'Failed to generate link');
   }
 
   async function copyLink() {
@@ -96,6 +105,8 @@ export default function ImpersonatePage() {
           ) : (
             <>
               <h2 className="text-base font-black text-slate-900">{selectedTenant.name}</h2>
+
+              {error && <p className="text-sm text-rose-600">{error}</p>}
 
               {link && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-3">
@@ -144,6 +155,7 @@ export default function ImpersonatePage() {
           )}
         </div>
       </div>
+      {dialog}
     </>
   );
 }

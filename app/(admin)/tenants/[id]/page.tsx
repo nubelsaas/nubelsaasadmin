@@ -5,6 +5,7 @@ import { ArrowLeft, Ban, Copy as CopyIcon, Download, Save, Users, GitBranch, Sho
 import Link from 'next/link';
 import Image from 'next/image';
 import AdminHeader from '@/components/layout/AdminHeader';
+import { useAskDialog } from '@/components/shared/AskDialog';
 
 type Tenant = {
   id: string; name: string; admin_email: string | null;
@@ -65,6 +66,7 @@ export default function TenantDetailPage() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [suspensionError, setSuspensionError] = useState<string | null>(null);
+  const { ask, dialog } = useAskDialog();
 
   // Editable fields
   const [email,    setEmail]    = useState('');
@@ -192,8 +194,13 @@ export default function TenantDetailPage() {
 
   async function handleExport() {
     if (!tenant) return;
-    const reason = window.prompt(`Why are you exporting the data of "${tenant.name}"? It includes customer personal data.`);
-    if (!reason?.trim()) return;
+    const reason = await ask({
+      title: `Export the data of ${tenant.name}?`,
+      message: 'The ZIP includes customer personal data. Keep it safe and delete it when you no longer need it.',
+      confirmLabel: 'Download ZIP',
+      placeholder: 'e.g. The salon asked for a copy of its data',
+    });
+    if (!reason) return;
 
     setExportError(null);
     setExporting(true);
@@ -218,10 +225,20 @@ export default function TenantDetailPage() {
   async function handleSuspensionToggle() {
     if (!tenant) return;
     const suspended = !tenant.suspended_at;
-    const reason = window.prompt(suspended
-      ? `Why are you suspending "${tenant.name}"? Its staff will only be able to read.`
-      : `Why are you reactivating "${tenant.name}"?`);
-    if (!reason?.trim()) return;
+    const reason = await ask(suspended
+      ? {
+          title: `Suspend ${tenant.name}?`,
+          message: 'Its staff will only be able to read: no sales, appointments or changes until you reactivate it.',
+          confirmLabel: 'Suspend',
+          tone: 'danger',
+          placeholder: 'e.g. Payment overdue since…',
+        }
+      : {
+          title: `Reactivate ${tenant.name}?`,
+          message: 'Its staff can work normally again.',
+          confirmLabel: 'Reactivate',
+        });
+    if (!reason) return;
 
     setSuspensionError(null);
     setSavingSuspension(true);
@@ -638,6 +655,7 @@ export default function TenantDetailPage() {
           </div>
         </div>
       )}
+      {dialog}
     </>
   );
 }

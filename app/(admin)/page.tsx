@@ -4,6 +4,7 @@ import { AlertTriangle, Building2, CalendarDays, Globe, Info, Wallet } from 'luc
 import Link from 'next/link';
 import { countryLabel, groupByCountry } from '@/lib/countries';
 import { loadAlerts, loadTenantHealth, type HealthStatus, type PortalAlert, type TenantHealth } from '@/lib/tenantHealth';
+import { STATUS_LABEL, STATUS_STYLE } from '@/lib/healthStatus';
 
 type TenantRow = { id: string; name: string; country_iso: string | null; created_at: string };
 
@@ -159,14 +160,6 @@ export default async function DashboardPage() {
   );
 }
 
-const STATUS_LABEL: Record<HealthStatus, string> = { active: 'Active', quiet: 'Quiet', declining: 'Declining', new: 'No sales yet', suspended: 'Suspended' };
-const STATUS_STYLE: Record<HealthStatus, string> = {
-  active: 'bg-emerald-50 text-emerald-600',
-  quiet: 'bg-amber-50 text-amber-700',
-  declining: 'bg-amber-50 text-amber-700',
-  new: 'bg-slate-100 text-slate-500',
-  suspended: 'bg-rose-50 text-rose-600',
-};
 
 function formatMoney(value: number) {
   return Math.round(value).toLocaleString('en');

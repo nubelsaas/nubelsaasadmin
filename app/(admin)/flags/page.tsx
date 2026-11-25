@@ -2,10 +2,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Search, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
-import { planDefault } from '@/lib/planFeatures';
+import { flagForPlanFeature, planDefault } from '@/lib/planFeatures';
 import { diffJson } from '@/lib/jsonChanges';
+import { useAskDialog } from '@/components/shared/AskDialog';
 
-type Plan = { id: string; default_features: Record<string, unknown> | null };
+type Plan = { id: string; name: string; default_features: Record<string, unknown> | null };
 type Tenant = { id: string; name: string; plan_id: string | null; feature_overrides: Record<string, unknown> | null; settings: Record<string, unknown> | null; is_audit_enabled: boolean };
 
 type BoolFlag = { key: string; label: string; description: string; defaultOn: boolean };
@@ -51,6 +52,7 @@ export default function FlagsPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loadingTenants, setLoadingTenants] = useState(false);
+  const { ask, dialog } = useAskDialog();
 
   const loadTenants = useCallback(async () => {
     setLoadingTenants(true);
@@ -119,9 +121,14 @@ export default function FlagsPage() {
 
     const disablingAudit = !auditEnabled && selected.is_audit_enabled !== false;
     const auditReason = disablingAudit
-      ? window.prompt(`Why are you turning off the audit log for "${selected.name}"? Changes in this salon stop being recorded.`)
+      ? await ask({
+          title: `Turn off the audit log for ${selected.name}?`,
+          message: 'Changes in this salon stop being recorded until you turn it back on.',
+          confirmLabel: 'Turn off and save',
+          tone: 'danger',
+        })
       : null;
-    if (disablingAudit && !auditReason?.trim()) return;
+    if (disablingAudit && !auditReason) return;
 
     setSaveError(null);
     setSaving(true);
@@ -187,6 +194,8 @@ export default function FlagsPage() {
           ) : (
             <div className="max-w-xl space-y-6">
               <h2 className="text-base font-black text-slate-900">{selected.name}</h2>
+
+              <PlanFeatures plan={plans.find(p => p.id === selected.plan_id)} />
 
               {/* Feature Overrides */}
               <div>
@@ -303,6 +312,44 @@ export default function FlagsPage() {
           )}
         </div>
       </div>
+      {dialog}
     </>
+  );
+}
+
+// Lo que incluye el plan del salón. Las funciones sin flag en el app se marcan: el plan las lista,
+// pero encenderlas o apagarlas no cambia nada todavía (docs/features/flags.md).
+function PlanFeatures({ plan }: { plan: Plan | undefined }) {
+  if (!plan) {
+    return <p className="text-xs text-amber-700">This salon has no plan, so every flag uses its default.</p>;
+  }
+  const features = Object.entries(plan.default_features ?? {});
+  return (
+    <div>
+      <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">Plan: {plan.name}</p>
+      <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
+        {features.length === 0 ? (
+          <p className="text-xs text-slate-400">This plan doesn&apos;t set any features.</p>
+        ) : (
+          <ul className="flex flex-wrap gap-1.5">
+            {features.map(([feature, value]) => {
+              const flag = flagForPlanFeature(feature);
+              const on = Boolean(value);
+              return (
+                <li key={feature}
+                  title={flag ? `Default for ${flag}` : 'Listed in the plan, but the app has no flag for it yet'}
+                  className={`text-[11px] rounded-full border px-2.5 py-1 ${on ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                  <span className={`font-mono ${on ? '' : 'line-through'}`}>{feature}</span>
+                  {!flag && <span className="ml-1.5 font-bold text-amber-600">· no effect yet</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="text-[11px] text-slate-400 mt-3">
+          Crossed out = off in the plan. Features marked &ldquo;no effect yet&rdquo; are listed in the plan but nothing in the app reads them.
+        </p>
+      </div>
+    </div>
   );
 }

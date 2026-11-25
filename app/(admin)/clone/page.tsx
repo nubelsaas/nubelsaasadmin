@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, RotateCcw, ChevronDown, ChevronUp, Search, Plus, CheckCircle, XCircle, Loader, ShieldCheck } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
+import { useAskDialog } from '@/components/shared/AskDialog';
 
 // ── Table definitions ──────────────────────────────────────────────────────────
 
@@ -161,6 +162,7 @@ export default function ClonePage() {
 
   // Log
   const [log, setLog] = useState<string[]>([]);
+  const { ask, dialog } = useAskDialog();
   const [running, setRunning] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -331,7 +333,13 @@ export default function ClonePage() {
 
   async function handleUndo() {
     if (!clonedTarget || running) return;
-    const typed = window.prompt(`This deletes all the data in "${clonedTarget.name}" and can't be undone. Type the tenant name to confirm.`);
+    const typed = await ask({
+      title: `Undo the clone on ${clonedTarget.name}?`,
+      message: "This deletes all the data in this tenant and can't be undone.",
+      confirmLabel: 'Undo clone',
+      tone: 'danger',
+      expected: clonedTarget.name,
+    });
     if (typed !== clonedTarget.name) return;
     const target = clonedTarget;
 
@@ -720,6 +728,7 @@ export default function ClonePage() {
           </div>
         </div>
       )}
+      {dialog}
     </>
   );
 }

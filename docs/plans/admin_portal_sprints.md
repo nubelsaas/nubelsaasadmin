@@ -89,9 +89,12 @@
 ---
 
 ### Mejoras de UX menores
-- [ ] Modal de confirmación antes de ejecutar Onboarding/Demo Seed (resumen de lo que se hará)
+- [x] Modal de confirmación antes de ejecutar Onboarding/Demo Seed (resumen de lo que se hará)
 - [ ] Barra de progreso estimada durante el clone (en lugar de solo log de texto)
-- [ ] Búsqueda global de tenants en el header del admin
+- [x] Búsqueda global de tenants en el header del admin (por nombre o correo de contacto)
+- [x] Lista de tenants: filtros (plan, estado, país, salud), orden y filtros en la URL
+- [x] Diálogo propio para motivos y confirmaciones (`components/shared/AskDialog.tsx`) en vez de `window.prompt`
+- [x] Flags: sección del plan, con las funciones que aún no tienen efecto marcadas
 
 ---
 

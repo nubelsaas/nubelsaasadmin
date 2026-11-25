@@ -3,22 +3,23 @@ import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
 import { createAdminUserForTenant } from '@/lib/createAdminUser';
 import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
+import { matchesSearch } from '@/lib/tenantFilters';
 
 export async function GET(req: NextRequest) {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const search = req.nextUrl.searchParams.get('search') ?? '';
   const db = createAdminClient();
-  let query = db
+  const { data, error } = await db
     .from('tenants')
     .select('id, name, admin_email, created_at, country_iso, feature_overrides, settings, is_audit_enabled, suspended_at, plan_id')
     .order('country_iso', { nullsFirst: false })
     .order('name');
-  if (search) query = query.ilike('name', `%${search}%`);
-
-  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+
+  // Se filtra aquí y no con ilike: busca también por correo de contacto, sin tildes, y un "%" o
+  // "_" en la búsqueda es texto, no comodín. Son pocas filas.
+  return NextResponse.json(search.trim() ? data.filter(t => matchesSearch(t, search)) : data);
 }
 
 export async function POST(req: NextRequest) {

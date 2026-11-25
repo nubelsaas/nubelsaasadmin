@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, UserPlus, ShieldCheck, ChevronDown, ChevronUp, Mail, Link2, Copy, Check, Crown, UserCheck, UserX } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
+import { useAskDialog, type AskOptions } from '@/components/shared/AskDialog';
 
 type Role = { id: string; name: string; type: string };
 type TenantUser = {
@@ -30,6 +31,7 @@ export default function TenantUsersPage() {
   const [loading,          setLoading]          = useState(true);
   const [showForm,         setShowForm]         = useState(false);
   const [mode,             setMode]             = useState<'invite' | 'manual'>('invite');
+  const { ask, dialog } = useAskDialog();
   const [email,            setEmail]            = useState('');
   const [adminName,        setAdminName]        = useState('');
   const [password,         setPassword]         = useState('');
@@ -67,9 +69,9 @@ export default function TenantUsersPage() {
 
   // ── Admin creation ──────────────────────────────────────────────
 
-  async function handleAccess(user: TenantUser, action: 'deactivate' | 'reactivate' | 'make_owner', question: string) {
-    const reason = window.prompt(question);
-    if (!reason?.trim()) return;
+  async function handleAccess(user: TenantUser, action: 'deactivate' | 'reactivate' | 'make_owner', question: AskOptions) {
+    const reason = await ask(question);
+    if (!reason) return;
 
     setAction(user.id, { status: 'loading', message: undefined, link: undefined });
     const res = await fetch(`/api/tenants/${id}/users/${user.id}/access`, {
@@ -366,20 +368,20 @@ export default function TenantUsersPage() {
                           </button>
                           {u.is_active && !isAdmin && (
                             <button
-                              onClick={() => handleAccess(u, 'make_owner', `Why should ${u.email} become an owner? They get full access to this salon.`)}
+                              onClick={() => handleAccess(u, 'make_owner', { title: `Make ${u.email} an owner?`, message: 'They get full access to this salon.', confirmLabel: 'Make owner' })}
                               className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50 transition-colors">
                               <Crown size={13} /> Make owner
                             </button>
                           )}
                           {u.is_active ? (
                             <button
-                              onClick={() => handleAccess(u, 'deactivate', `Why are you deactivating ${u.email}? They can't log in afterwards.`)}
+                              onClick={() => handleAccess(u, 'deactivate', { title: `Deactivate ${u.email}?`, message: "They can't log in afterwards. Their sales and appointments stay.", confirmLabel: 'Deactivate', tone: 'danger' })}
                               className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-rose-200 bg-white text-rose-600 px-3 py-2 hover:bg-rose-50 transition-colors">
                               <UserX size={13} /> Deactivate
                             </button>
                           ) : (
                             <button
-                              onClick={() => handleAccess(u, 'reactivate', `Why are you reactivating ${u.email}?`)}
+                              onClick={() => handleAccess(u, 'reactivate', { title: `Reactivate ${u.email}?`, message: 'They can log in again.', confirmLabel: 'Reactivate' })}
                               className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50 transition-colors">
                               <UserCheck size={13} /> Reactivate
                             </button>
@@ -431,6 +433,7 @@ export default function TenantUsersPage() {
           </div>
         )}
       </div>
+      {dialog}
     </>
   );
 }

@@ -15,16 +15,27 @@ Gestión completa de tenants: listado con búsqueda, creación de nuevos tenants
 ## Pantalla de listado `/tenants`
 
 ### Funcionalidades
-- **Búsqueda en tiempo real** por nombre (debounced 300ms, query `ilike`)
-- **Agrupación por país** con emoji flags
+- **Búsqueda** por nombre o correo de contacto, sin distinguir tildes ni mayúsculas. Varias palabras deben aparecer todas. Un `%` o `_` es texto, no comodín.
+- **Filtros:** plan (o sin plan), estado (activo / suspendido), país (o sin país), salud y **Needs attention**.
+- **Orden:** nombre A–Z, más nuevos o más antiguos. Dentro de cada país se respeta el orden elegido.
+- **Agrupación por país** con emoji flags, y contador "N of M tenants".
+- **Los filtros viven en la URL** (`?q=&plan=&status=&country=&health=&sort=`): al volver desde un salón la lista sigue filtrada, y se puede compartir el enlace. **Clear filters** los quita.
 - **Crear nuevo tenant** — botón "New" abre el `TenantCreateModal`
+
+La lista y los filtros salen de `lib/tenantFilters.ts` (probado en `tests/tenantFilters.test.mjs`). La API `GET /api/tenants?search=` usa la misma búsqueda, así que la del encabezado (`AdminHeader`) también encuentra por correo.
+
+**Salud:** `GET /api/tenants/health` devuelve por salón `{ status, needsAttention }`. Es la misma lectura que el dashboard (6 meses de ventas, `lib/tenantHealth.ts`) y tarda más, así que la lista se muestra primero y las insignias aparecen después. Mientras no llega, el filtro de salud muestra "Loading...". **Needs attention** son los avisos altos por salón del dashboard: auditoría apagada, sin dueño activo, o contacto desactivado.
+
+Sin paginación: son pocos salones y se filtran en el navegador. Revisar si pasan de unos cientos.
 
 ### Columnas mostradas por tenant
 | Campo | Descripción |
 |---|---|
 | `name` | Nombre del tenant |
 | `admin_email` | Correo de contacto del salón (ver abajo) |
-| `created_at` | Fecha formateada en inglés |
+| Plan | Nombre del plan (`plan_id` → `subscription_plans.name`) |
+| Salud | Insignia de estado y **Needs attention** (ver arriba) |
+| `created_at` | Fecha formateada en inglés (oculta en mobile) |
 | `country_iso` | Usado para la agrupación |
 
 ---
@@ -147,7 +158,7 @@ Al borrar:
 - Se eliminan los logins de `auth.users` de sus usuarios, salvo los que estén en `admin_superadmins`. Si quedaran, el email seguiría ocupado para un admin nuevo. Si alguno falla, el tenant ya se borró y la pantalla lista esos emails.
 - `admin_audit_logs` conserva el registro, con el nombre del tenant y la cantidad de usuarios. El logo sigue en el bucket `empresa-logos`.
 
-**No existe desactivar:** `tenants` no tiene columna de estado, y el app principal no bloquea el acceso por tenant.
+**Para dejar un salón sin uso sin borrarlo:** usar **Suspension** (arriba). Sus usuarios solo pueden leer hasta reactivarlo.
 
 ### Public booking page
 
@@ -366,7 +377,9 @@ La tabla `tenants` **no tiene**: `is_active`, `slug`, `contact_email`, `plan` (t
 
 | Archivo | Rol |
 |---|---|
-| `app/(admin)/tenants/page.tsx` | Listado con búsqueda y agrupación por país |
+| `app/(admin)/tenants/page.tsx` | Listado con búsqueda, filtros, orden y agrupación por país |
+| `lib/tenantFilters.ts` | Búsqueda, filtros, orden y filtros en la URL |
+| `app/api/tenants/health/route.ts` | GET salud por salón para la lista |
 | `app/(admin)/tenants/[id]/page.tsx` | Detalle: stats, logo, form edición |
 | `app/(admin)/tenants/[id]/users/page.tsx` | Gestión de usuarios del tenant |
 | `components/tenants/TenantCreateModal.tsx` | Modal de creación |
