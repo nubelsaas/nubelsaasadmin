@@ -63,6 +63,7 @@ Ver datos de un salón también queda registrado (`logAdminView`): el detalle, e
 |---|---|---|
 | `view.tenant` · `view.staff` · `view.activity` | `GET /api/tenants/[id]` · `GET /api/tenants/[id]/users` · `GET /api/audit` | — (el salón va en `tenant_id`; `null` si se miró la actividad de todos) |
 | `impersonate` | `POST /api/impersonate` | `email`, `reason` |
+| `impersonate.end` | `POST /api/impersonate/sessions/[sessionId]/end` | `session_id`, `opened_by`, `target_user_id` |
 | `user.magic_link` · `user.invite_resend` | `POST /api/tenants/[id]/users/[userId]/resend` | `email` |
 | `user.deactivate` · `user.reactivate` · `user.make_owner` | `POST /api/tenants/[id]/users/[userId]/access` | `email`, `reason` |
 | `tenant.create` | `POST /api/tenants` | `name`, `admin_email`, `plan_id` |

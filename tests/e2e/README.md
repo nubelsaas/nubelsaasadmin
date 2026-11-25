@@ -10,7 +10,7 @@ No corren en CI ni con `npm test` (solo toma `tests/*.test.mjs`).
 | `health-e2e.mjs` | Salud de salones y avisos del dashboard (`lib/tenantHealth.ts`) | Sí (dashboard) |
 | `views-e2e.mjs` | Registro de lecturas (`logAdminView`) | Sí |
 | `contact-e2e.mjs` | Riesgos 29 y 30: email de contacto y un email por salón | Sí |
-| `impersonate-e2e.mjs` | Sesión de soporte marcada en `audit_log` (`impersonated_by`). Necesita `audit_impersonation.sql` de nubelsaas en DEV | Sí |
+| `impersonate-e2e.mjs` | Sesión de soporte marcada en `audit_log` (`impersonated_by`), tope de 60 minutos, lista de sesiones activas y End (espera 65 s). Necesita `audit_impersonation.sql` de nubelsaas en DEV | Sí |
 | `quickwins-e2e.mjs` | Lista de tenants (búsqueda, filtros, orden, URL), salud por salón, plan en Flags y diálogo de motivos. Usa Playwright con un navegador real | Sí |
 
 ```bash

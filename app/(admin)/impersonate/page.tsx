@@ -1,8 +1,9 @@
 'use client';
 import { useState, useCallback, useEffect } from 'react';
-import { Search, ExternalLink, Copy, Check, UserCog } from 'lucide-react';
+import { Search, ExternalLink, Copy, Check, UserCog, RefreshCw, Power } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
 import { useAskDialog } from '@/components/shared/AskDialog';
+import type { ActiveSupportSession } from '@/app/api/impersonate/sessions/route';
 
 type Tenant = { id: string; name: string };
 type TenantUser = { id: string; email: string | null; full_name: string | null; is_active: boolean };
@@ -15,19 +16,48 @@ export default function ImpersonatePage() {
   const [loadingTenants, setLoadingTenants] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [link, setLink] = useState<string | null>(null);
+  const [linkExpiresAt, setLinkExpiresAt] = useState<number | null>(null);
+  const [sessions, setSessions] = useState<ActiveSupportSession[] | null>(null);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [ending, setEnding] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { ask, dialog } = useAskDialog();
 
-  const loadTenants = useCallback(async () => {
+  // Una respuesta lenta de una búsqueda anterior (o de la carga inicial) no pisa la actual.
+  useEffect(() => {
+    let stale = false;
     setLoadingTenants(true);
-    const res = await fetch(`/api/tenants${tenantSearch.trim() ? `?search=${encodeURIComponent(tenantSearch.trim())}` : ''}`);
-    setTenants(res.ok ? await res.json() : []);
-    setLoadingTenants(false);
+    const query = tenantSearch.trim();
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/tenants${query ? `?search=${encodeURIComponent(query)}` : ''}`);
+      const data = res.ok ? await res.json() : [];
+      if (stale) return;
+      setTenants(data);
+      setLoadingTenants(false);
+    }, query ? 200 : 0);
+    return () => { stale = true; clearTimeout(timer); };
   }, [tenantSearch]);
 
-  useEffect(() => { loadTenants(); }, [loadTenants]);
+  const loadSessions = useCallback(async () => {
+    setSessionsError(null);
+    const res = await fetch('/api/impersonate/sessions');
+    const json = await res.json().catch(() => null);
+    if (res.ok) setSessions(json);
+    else setSessionsError(json?.error ?? 'Could not load support sessions');
+  }, []);
+
+  useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  async function endSession(sessionId: string) {
+    setEnding(sessionId);
+    setSessionsError(null);
+    const res = await fetch(`/api/impersonate/sessions/${sessionId}/end`, { method: 'POST' });
+    if (!res.ok) setSessionsError((await res.json().catch(() => null))?.error ?? 'Could not end the session');
+    setEnding(null);
+    await loadSessions();
+  }
 
   async function selectTenant(t: Tenant) {
     setSelectedTenant(t);
@@ -59,8 +89,13 @@ export default function ImpersonatePage() {
     });
     const json = await res.json();
     setGenerating(null);
-    if (json.link) setLink(json.link);
-    else setError(json.error ?? 'Failed to generate link');
+    if (json.link) {
+      setLink(json.link);
+      setLinkExpiresAt(json.expiresAt ?? null);
+      loadSessions();
+    } else {
+      setError(json.error ?? 'Failed to generate link');
+    }
   }
 
   async function copyLink() {
@@ -98,6 +133,8 @@ export default function ImpersonatePage() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-5">
+          <ActiveSessions sessions={sessions} error={sessionsError} ending={ending} onEnd={endSession} onRefresh={loadSessions} />
+
           {!selectedTenant ? (
             <div className="flex items-center justify-center h-48 text-sm text-slate-400">
               Select a tenant to see its users
@@ -113,7 +150,8 @@ export default function ImpersonatePage() {
                   <p className="text-sm font-semibold text-emerald-800">Support session ready</p>
                   <p className="text-xs text-emerald-700">
                     Everything you do in this session is logged in the salon&apos;s audit log as Nubel support, under your name.
-                    The link signs in directly for about an hour: open it yourself and don&apos;t share it.
+                    The link signs in directly{linkExpiresAt ? ` until ${formatTime(new Date(linkExpiresAt * 1000).toISOString())}` : ''}: open it yourself and don&apos;t share it.
+                    End it sooner under Active support sessions.
                   </p>
                   <div className="flex gap-2">
                     <button onClick={copyLink}
@@ -157,5 +195,61 @@ export default function ImpersonatePage() {
       </div>
       {dialog}
     </>
+  );
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleString('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// Sesiones de soporte vivas en Auth, de todos los salones y admins. "End" la cierra: no se puede
+// renovar y el app pierde el acceso al volver a pedir el usuario (docs/features/impersonate.md).
+function ActiveSessions({ sessions, error, ending, onEnd, onRefresh }: {
+  sessions: ActiveSupportSession[] | null;
+  error: string | null;
+  ending: string | null;
+  onEnd: (sessionId: string) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
+        <p className="flex-1 text-[11px] font-black text-slate-400 uppercase tracking-wider">
+          Active support sessions{sessions ? ` (${sessions.length})` : ''}
+        </p>
+        <button onClick={onRefresh} className="text-slate-400 hover:text-slate-600" aria-label="Refresh support sessions">
+          <RefreshCw size={14} />
+        </button>
+      </div>
+      {error && <p className="px-5 py-3 text-sm text-rose-600">{error}</p>}
+      {!sessions ? (
+        !error && <p className="px-5 py-3 text-xs text-slate-400">Loading...</p>
+      ) : sessions.length === 0 ? (
+        <p className="px-5 py-3 text-xs text-slate-400">None. Sessions you open appear here until they expire or you end them.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {sessions.map(s => (
+            <li key={s.sessionId} className="flex items-start gap-3 px-5 py-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 truncate">
+                  {s.targetEmail ?? 'Deleted user'} <span className="text-slate-400 font-normal">· {s.tenantName ?? 'Deleted tenant'}</span>
+                </p>
+                <p className="text-xs text-slate-500 truncate">&ldquo;{s.reason}&rdquo; · opened by {s.adminEmail}</p>
+                <p className="text-[11px] text-slate-400">
+                  Opened {formatTime(s.openedAt)} ·{' '}
+                  {s.expiresAt
+                    ? <>ends {formatTime(s.expiresAt)}</>
+                    : <span className="font-bold text-amber-600">no time limit (opened before the 60-minute cap)</span>}
+                </p>
+              </div>
+              <button onClick={() => onEnd(s.sessionId)} disabled={ending === s.sessionId}
+                className="flex items-center gap-1.5 text-xs font-bold rounded-full border border-rose-200 text-rose-600 px-3 py-1.5 hover:bg-rose-50 disabled:opacity-50 flex-shrink-0">
+                <Power size={13} /> {ending === s.sessionId ? 'Ending…' : 'End'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

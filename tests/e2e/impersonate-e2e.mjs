@@ -1,5 +1,5 @@
 // Sesión de soporte (Impersonate): lo hecho en ella queda en audit_log del app con el admin
-// que la abrió (impersonated_by). Necesita en DEV docs/database/audit_impersonation.sql del
+// que la abrió (impersonated_by). También: tope de 60 minutos, lista de sesiones activas y End. Necesita en DEV docs/database/audit_impersonation.sql del
 // repo nubelsaas y el portal en 3003.
 import { createRequire } from 'node:module';
 import { randomUUID, createHmac } from 'node:crypto';
@@ -100,6 +100,67 @@ try {
   await db.from('audit_log').insert({ tenant_id: tenant, user_id: ownerId, action: 'UPDATE', table_name: 'zz_forged', record_id: forged, impersonated_by: randomUUID(), impersonated_by_email: 'fake@x.co' });
   const { data: f } = await db.from('audit_log').select('impersonated_by, impersonated_by_email').eq('record_id', forged).maybeSingle();
   ok(f && f.impersonated_by === null && f.impersonated_by_email === null, `a forged mark is cleared (${JSON.stringify(f)})`);
+
+  // ── Duración y cierre: admin_cap / admin_end / admin_support_session_status ──
+  const exp = j.expiresAt * 1000;
+  ok(Math.abs(exp - (Date.now() + 60 * 60_000)) < 5 * 60_000, `session capped at 60 minutes (${new Date(exp).toISOString()})`);
+  const list = async () => (await fetch(BASE + '/api/impersonate/sessions', { headers: H() })).json();
+  let listed = await list();
+  ok(Array.isArray(listed) && listed.some(s => s.sessionId === sessionId && s.expiresAt && s.targetEmail === ownerEmail && s.tenantName === `ZZ_IMP_${tag}`),
+    `active session listed with its end time (${JSON.stringify(listed).slice(0, 200)})`);
+
+  const outsider = createClient(url, anon, { auth: { persistSession: false } });
+  for (const [fn, args] of [
+    ['admin_support_session_status', { p_session_ids: [sessionId] }],
+    ['admin_cap_support_session', { p_session_id: sessionId, p_minutes: 480 }],
+    ['admin_end_support_session', { p_session_id: sessionId, p_admin_email: 'x@x.co' }],
+  ]) {
+    const [r1, r2] = [await outsider.rpc(fn, args), await own.rpc(fn, args)];
+    ok(!!r1.error && !!r2.error, `${fn} refused to anon and to salon users`);
+  }
+
+  const ownSession = JSON.parse(Buffer.from((await own.auth.getSession()).data.session.access_token.split('.')[1], 'base64url').toString()).session_id;
+  const capOther = await db.rpc('admin_cap_support_session', { p_session_id: ownSession, p_minutes: 1 });
+  ok(capOther.error?.message?.includes('NOT_A_SUPPORT_SESSION'), `cannot cap a normal user session (${capOther.error?.message})`);
+  r = await fetch(`${BASE}/api/impersonate/sessions/${ownSession}/end`, { method: 'POST', headers: H() });
+  ok(r.status === 404, `End refuses a normal user session (${r.status})`);
+  ok(!(await own.auth.getUser()).error, "the owner's own session is untouched");
+
+  const renewed = await support.auth.refreshSession();
+  ok(!renewed.error, `support session renews before End ${renewed.error?.message ?? ''}`);
+  const live = renewed.data.session;
+  const before = await createClient(url, anon, { auth: { persistSession: false } }).auth.getUser(live.access_token);
+  ok(before.data.user?.id === ownerId, `Auth accepts the support token before End ${before.error?.message ?? ''}`);
+
+  r = await fetch(`${BASE}/api/impersonate/sessions/${sessionId}/end`, { method: 'POST', headers: H() });
+  const ended = await r.json();
+  ok(r.ok && ended.wasLive === true, `End closes the live session (${JSON.stringify(ended)})`);
+  const fresh = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+  const afterEnd = await fresh.auth.refreshSession({ refresh_token: live.refresh_token });
+  ok(!!afterEnd.error, `ended session cannot renew (${afterEnd.error?.message})`);
+  const who = await fresh.auth.getUser(live.access_token);
+  ok(!!who.error, `Auth rejects the ended session's token (${who.error?.message})`);
+  listed = await list();
+  ok(!listed.some(s => s.sessionId === sessionId), 'ended session leaves the list');
+  const { data: endRow } = await db.from('admin_impersonation_sessions').select('ended_at, ended_by_email').eq('session_id', sessionId).single();
+  ok(endRow.ended_at && endRow.ended_by_email === mail, `end time and admin recorded (${JSON.stringify(endRow)})`);
+  const { count: endLogged } = await db.from('admin_audit_logs').select('id', { count: 'exact', head: true }).eq('admin_user_id', adminId).eq('action', 'impersonate.end');
+  ok(endLogged === 1, `portal audit log has impersonate.end (${endLogged})`);
+  r = await fetch(`${BASE}/api/impersonate/sessions/${sessionId}/end`, { method: 'POST', headers: H() });
+  ok(r.ok && (await r.json()).wasLive === false, 'ending twice is harmless');
+
+  // El tope lo aplica Auth: una sesión con not_after vencido no se renueva.
+  r = await call({ email: ownerEmail, reason: 'probar vencimiento' });
+  const j2 = await r.json();
+  const h2 = new URLSearchParams(new URL(j2.link).hash.slice(1));
+  const s2 = JSON.parse(Buffer.from(h2.get('access_token').split('.')[1], 'base64url').toString()).session_id;
+  await db.rpc('admin_cap_support_session', { p_session_id: s2, p_minutes: 1 }).throwOnError();
+  console.log('     waiting 65 s for the 1-minute cap to pass…');
+  await new Promise(done => setTimeout(done, 65_000));
+  const expired = await fresh.auth.refreshSession({ refresh_token: h2.get('refresh_token') });
+  ok(!!expired.error, `Auth refuses to renew past the cap (${expired.error?.message})`);
+  listed = await list();
+  ok(!listed.some(s => s.sessionId === s2), 'expired session leaves the list');
 } catch (e) {
   fails++;
   console.log('ERROR', e.message ?? e);

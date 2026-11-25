@@ -3,7 +3,7 @@ import AdminHeader from '@/components/layout/AdminHeader';
 import { AlertTriangle, Building2, CalendarDays, Globe, Info, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { countryLabel, groupByCountry } from '@/lib/countries';
-import { loadAlerts, loadTenantHealth, type HealthStatus, type PortalAlert, type TenantHealth } from '@/lib/tenantHealth';
+import { loadAlerts, loadTenantHealth, type PortalAlert, type TenantHealth } from '@/lib/tenantHealth';
 import { STATUS_LABEL, STATUS_STYLE } from '@/lib/healthStatus';
 
 type TenantRow = { id: string; name: string; country_iso: string | null; created_at: string };

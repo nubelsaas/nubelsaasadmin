@@ -8,6 +8,7 @@ export type AdminView = 'view.tenant' | 'view.staff' | 'view.activity';
 export type AdminAction =
   | AdminView
   | 'impersonate'
+  | 'impersonate.end'
   | 'user.magic_link'
   | 'user.invite_resend'
   | 'user.deactivate'

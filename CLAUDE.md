@@ -87,6 +87,8 @@ Rutas ya creadas:
 - `POST /api/tenants/[id]/export` — descargar ZIP con los datos del tenant (requiere `reason`)
 - `POST /api/tenants/[id]/users/[userId]/access` — desactivar, reactivar o hacer dueño (requiere `reason`)
 - `POST /api/impersonate` — abrir sesión de soporte, marcada en `audit_log` del app (requiere `reason`)
+- `GET /api/impersonate/sessions` — sesiones de soporte vivas
+- `POST /api/impersonate/sessions/[sessionId]/end` — cerrar una sesión de soporte
 - `POST /api/clone/stream` — SSE clone progress
 
 ## Auth

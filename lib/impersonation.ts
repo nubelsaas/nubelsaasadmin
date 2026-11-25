@@ -5,6 +5,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 // app principal marca en audit_log (impersonated_by) todo lo que se haga en esa sesión.
 // Tabla y trigger: docs/database/audit_impersonation.sql del repo nubelsaas.
 
+/** Cuánto dura una sesión de soporte. Auth no la renueva después (auth.sessions.not_after). */
+export const SUPPORT_SESSION_MINUTES = 60;
+
 export type SupportSession = {
   link: string;
   sessionId: string;
@@ -67,10 +70,22 @@ export async function openSupportSession(
     return { error: `Could not record the support session: ${recordError.message}` };
   }
 
+  // Sin tope, el app renovaría la sesión sin límite con el refresh token del enlace.
+  // Si no se puede poner, no se entrega (docs/database/audit_impersonation.sql en nubelsaas).
+  const { data: notAfter, error: capError } = await db.rpc('admin_cap_support_session', {
+    p_session_id: sessionId,
+    p_minutes: SUPPORT_SESSION_MINUTES,
+  });
+  if (capError || !notAfter) {
+    await db.rpc('admin_end_support_session', { p_session_id: sessionId, p_admin_email: opts.admin.email }).then(() => {}, () => {});
+    await db.auth.admin.signOut(session.access_token, 'local').catch(() => {});
+    return { error: `Could not limit the support session to ${SUPPORT_SESSION_MINUTES} minutes: ${capError?.message ?? 'no expiry returned'}` };
+  }
+
   return {
     link: buildSessionLink(opts.appUrl, session),
     sessionId,
     targetUserId: session.user.id,
-    expiresAt: session.expires_at ?? 0,
+    expiresAt: Math.floor(new Date(notAfter as string).getTime() / 1000),
   };
 }

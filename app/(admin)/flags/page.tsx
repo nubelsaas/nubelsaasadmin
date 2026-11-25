@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
 import { flagForPlanFeature, planDefault } from '@/lib/planFeatures';
@@ -54,16 +54,20 @@ export default function FlagsPage() {
   const [loadingTenants, setLoadingTenants] = useState(false);
   const { ask, dialog } = useAskDialog();
 
-  const loadTenants = useCallback(async () => {
+  // Una respuesta lenta de una búsqueda anterior (o de la carga inicial) no pisa la actual.
+  useEffect(() => {
+    let stale = false;
     setLoadingTenants(true);
-    const params = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
-    const res = await fetch(`/api/tenants${params}`);
-    const data = res.ok ? await res.json() : [];
-    setTenants(data);
-    setLoadingTenants(false);
+    const query = search.trim();
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/tenants${query ? `?search=${encodeURIComponent(query)}` : ''}`);
+      const data = res.ok ? await res.json() : [];
+      if (stale) return;
+      setTenants(data);
+      setLoadingTenants(false);
+    }, query ? 200 : 0);
+    return () => { stale = true; clearTimeout(timer); };
   }, [search]);
-
-  useEffect(() => { loadTenants(); }, [loadTenants]);
 
   useEffect(() => {
     fetch('/api/plans').then(res => (res.ok ? res.json() : [])).then(setPlans);
