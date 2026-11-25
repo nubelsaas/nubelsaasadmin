@@ -93,7 +93,8 @@ Rutas ya creadas:
 - `POST /api/impersonate/sessions/[sessionId]/end` — cerrar una sesión de soporte
 - `POST /api/tenants/[id]/notes` · `PATCH|DELETE /api/tenants/[id]/notes/[noteId]` — notas internas del salón
 - `POST /api/announcements` · `PATCH /api/announcements/[id]` · `POST /api/announcements/[id]/end` — anuncios a los salones
-- `POST /api/clone/stream` — SSE clone progress
+- `POST /api/audit/export` — CSV del Audit Log con los filtros de la pantalla
+- `POST /api/clone/stream` — SSE clone progress (líneas del log + eventos `progress`)
 
 ## Auth
 - La autenticación usa `auth.users` de Supabase (mismo proyecto), con MFA obligatorio (`docs/features/auth.md`).

@@ -15,6 +15,9 @@ No corren en CI ni con `npm test` (solo toma `tests/*.test.mjs`).
 | `integrations-e2e.mjs` | Tarjeta de integraciones: un salón con una falla conocida en email, WhatsApp, Google y push; que no salgan tokens. Usa Playwright | Sí |
 | `announcements-e2e.mjs` | Anuncios: público por plan, país, salón y dueños; cerrar por persona; críticos; que el app no lea las tablas; edición, fin, registro y la página. Usa Playwright. Necesita `announcements.sql` de nubelsaas en DEV | Sí |
 | `schema-e2e.mjs` | Página Schema: lee DEV sin filas ni claves, readiness, descarga y comparación con una copia modificada. No crea salones. Usa Playwright | Sí |
+| `clone-progress-e2e.mjs` | Barra del clone: pasos exactos (evento `progress`) con una tabla omitida, y Undo desde la página. Usa Playwright | Sí |
+| `timeline-export-e2e.mjs` | Timeline del salón (acciones, nota, sesión de soporte, anuncio) y CSV del Audit Log con filtros. Usa Playwright | Sí |
+| `mfa-recovery-e2e.mjs` | Recuperación de MFA con `scripts/reset-mfa.mjs`: QR nuevo en `/mfa` y el autenticador perdido ya no sirve. Usa Playwright | Sí |
 | `notes-e2e.mjs` | Notas internas: crear, fijar, editar, borrar, permisos entre dos admins, registro en el audit log y que no bloquean borrar el salón. Usa Playwright. Necesita `20261125_admin_tenant_notes.sql` en DEV | Sí |
 | `onboarding-e2e.mjs` | Checklist Setup: un salón nuevo, uno atascado y uno completo; filtros e insignias de la lista. Usa Playwright | Sí |
 
@@ -34,6 +37,9 @@ PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/onboarding-e
 PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/notes-e2e.mjs
 PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/announcements-e2e.mjs
 PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/schema-e2e.mjs
+PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/clone-progress-e2e.mjs
+PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/timeline-export-e2e.mjs
+PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/mfa-recovery-e2e.mjs
 ```
 
 `alias-loader.mjs` resuelve `@/…` e imports `.ts` sin extensión como lo hace Next; solo lo necesita `health-e2e.mjs`.

@@ -9,6 +9,7 @@ import { useAskDialog } from '@/components/shared/AskDialog';
 import IntegrationsCard from '@/components/tenants/IntegrationsCard';
 import OnboardingCard from '@/components/tenants/OnboardingCard';
 import NotesCard from '@/components/tenants/NotesCard';
+import TimelineCard from '@/components/tenants/TimelineCard';
 
 type Tenant = {
   id: string; name: string; admin_email: string | null;
@@ -345,6 +346,8 @@ export default function TenantDetailPage() {
         <OnboardingCard tenantId={tenant.id} />
 
         <IntegrationsCard tenantId={tenant.id} />
+
+        <TimelineCard tenantId={tenant.id} />
 
         {/* Public booking link — the salon's shareable /book portal URL */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">

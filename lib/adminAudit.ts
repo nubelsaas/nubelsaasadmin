@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabaseAdmin';
 
 export const AUDIT_FAILED = 'Could not write the audit log. The action was not performed.';
 
-export type AdminView = 'view.tenant' | 'view.staff' | 'view.activity' | 'view.integrations';
+export type AdminView = 'view.tenant' | 'view.staff' | 'view.activity' | 'view.integrations' | 'view.timeline';
 
 export type AdminAction =
   | AdminView
@@ -42,7 +42,9 @@ export type AdminAction =
   | 'note.delete'
   | 'announcement.create'
   | 'announcement.update'
-  | 'announcement.end';
+  | 'announcement.end'
+  | 'audit.export'
+  | 'admin.mfa_reset';   // scripts/reset-mfa.mjs, no una ruta
 
 /**
  * Registra una acción del portal en admin_audit_logs. Se llama ANTES de ejecutarla: si devuelve

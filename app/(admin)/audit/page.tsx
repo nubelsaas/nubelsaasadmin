@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Filter, Download } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
 import { countryLabel } from '@/lib/countries';
 
@@ -79,6 +79,39 @@ function AuditContent() {
     return () => clearTimeout(t);
   }, [tenantSearch]);
 
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // Mismos filtros que la tabla (lib/auditQuery.ts). Se registra como audit.export.
+  async function exportCsv() {
+    setExporting(true);
+    setExportError(null);
+    const res = await fetch('/api/audit/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        view,
+        tenantId: tenantFilter?.id ?? null,
+        action: actionFilter || null,
+        table: view === 'tenant' ? tableFilter || null : null,
+        from: fromDate || null,
+        to: toDate || null,
+        views: view === 'admin' && includeViews,
+      }),
+    });
+    if (res.ok) {
+      const name = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? 'audit.csv';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await res.blob());
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } else {
+      setExportError((await res.json().catch(() => null))?.error ?? 'Could not export');
+    }
+    setExporting(false);
+  }
+
   const loadAudit = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page) });
@@ -139,7 +172,12 @@ function AuditContent() {
         <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 flex-shrink-0">
           <div className="flex items-center gap-2 mb-1">
             <Filter size={14} className="text-slate-400" />
-            <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Filters</span>
+            <span className="flex-1 text-xs font-black text-slate-500 uppercase tracking-wider">Filters</span>
+            {exportError && <span className="text-xs text-rose-600">{exportError}</span>}
+            <button onClick={exportCsv} disabled={exporting || total === 0}
+              className="flex items-center gap-1.5 text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+              <Download size={13} /> {exporting ? 'Exporting…' : `Export CSV${total ? ` (${total.toLocaleString('en')})` : ''}`}
+            </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
 

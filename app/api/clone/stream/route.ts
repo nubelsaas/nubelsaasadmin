@@ -5,6 +5,7 @@ import { findTargetData } from '@/lib/cloneTarget';
 import { getCloneRun, getUndoStatus } from '@/lib/cloneUndo';
 import { EMPTY_TENANT_TABLES, findTablesWithRows } from '@/lib/tenantTables';
 import { AUDIT_FAILED, logAdminAction } from '@/lib/adminAudit';
+import { cloneStepTotal, makeTracker, type CloneProgress } from '@/lib/cloneProgress';
 import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
@@ -143,6 +144,7 @@ async function runOnboarding(
   copyStock: boolean,
   send: (m: string) => void,
   db: ReturnType<typeof createAdminClient>,
+  step: (label: string) => void = () => {},
 ) {
   send('📋 Building ID maps...');
   const idMaps: Record<string, Map<string, string>> = {};
@@ -179,6 +181,7 @@ async function runOnboarding(
     idMaps[table]    = map;
     mergedIds[table] = merged;
   }
+  step('ID maps');
 
   let userIdx = 0;
   for (const table of order) {
@@ -195,6 +198,7 @@ async function runOnboarding(
 
     if (!rows.length) {
       send(mergedCount ? `⏭  ${table}: ${mergedCount} merged into existing` : `⏭  ${table}: empty`);
+      step(table);
       continue;
     }
 
@@ -215,6 +219,7 @@ async function runOnboarding(
       if (e) throw new Error(`Insert ${table}: ${e.message}`);
     }
     send(`✓  ${table}: ${rows.length} rows` + (mergedCount ? ` (${mergedCount} merged)` : ''));
+    step(table);
   }
 
 }
@@ -477,6 +482,7 @@ async function rollback(
   targetId: string,
   db: ReturnType<typeof createAdminClient>,
   send: (m: string) => void,
+  progress: (p: CloneProgress) => void = () => {},
 ): Promise<boolean> {
   send('');
   send('⏪ Rolling back...');
@@ -527,6 +533,7 @@ async function rollback(
     send(`⚠️  No real admin (admin_email) found — keeping superadmin "${keeper.email}" to satisfy the DB guard. Delete the tenant to fully empty it.`);
   }
 
+  const step = makeTracker('rollback', cloneStepTotal('rollback', ROLLBACK_ORDER.length), progress);
   for (const table of ROLLBACK_ORDER) {
     let query = db.from(table as any).delete({ count: 'exact' }).eq('tenant_id', targetId);
     if (table === 'users' && keeper) {
@@ -536,6 +543,7 @@ async function rollback(
       query = query.neq('id', keeperRoleId);
     }
     const { count, error } = await query;
+    step(table);
     if (error) { send(`❌ ${table}: ${error.message}`); failed.push(table); continue; }
     if (count) { send(`   ✓ ${table}: ${count} rows removed`); total += count; }
   }
@@ -557,6 +565,7 @@ async function rollback(
 
 async function runOnboardingMode(
   sourceId: string, targetId: string, copyStock: boolean, excluded: Set<string>, send: (m: string) => void,
+  progress: (p: CloneProgress) => void,
 ) {
   const db = createAdminClient();
   const { data: src } = await db.from('tenants').select('name').eq('id', sourceId).single();
@@ -571,7 +580,8 @@ async function runOnboardingMode(
   send('─'.repeat(40));
 
   const order = ONBOARDING_ORDER.filter(t => !excluded.has(t));
-  await runOnboarding(sourceId, targetId, order, copyStock, send, db);
+  const step = makeTracker('onboarding', cloneStepTotal('onboarding', order.length), progress);
+  await runOnboarding(sourceId, targetId, order, copyStock, send, db, step);
 
   send('─'.repeat(40));
   send('✅ Onboarding complete — tenant ready to operate');
@@ -579,6 +589,7 @@ async function runOnboardingMode(
 
 async function runDemoSeedMode(
   sourceId: string, targetId: string, excluded: Set<string>, send: (m: string) => void,
+  progress: (p: CloneProgress) => void,
 ) {
   const db = createAdminClient();
   const { data: src } = await db.from('tenants').select('name').eq('id', sourceId).single();
@@ -595,15 +606,18 @@ async function runDemoSeedMode(
   // Phase 1: Clone catalog + users (obfuscated)
   send('── Phase 1: Onboarding (catalog + staff) ──');
   const order = DEMO_CLONE_ORDER.filter(t => !excluded.has(t));
-  await runOnboarding(sourceId, targetId, order, false, send, db);
+  const step = makeTracker('demo', cloneStepTotal('demo', order.length), progress);
+  await runOnboarding(sourceId, targetId, order, false, send, db, step);
 
   // Phase 2: Read cloned structure
   const structure = await readDemoStructure(targetId, db);
   if (!structure.branches.length) throw new Error('No branches found after onboarding');
+  step('Cloned structure');
 
   // Phase 3: Create 50 mock customers
   send('── Phase 2: Mock customers ──');
   const customers = await createMockCustomers(targetId, db, send);
+  step('Mock customers');
 
   // Phase 4: Generate 3 complete past months
   send('── Phase 3: Synthetic data (3 months) ──');
@@ -611,6 +625,7 @@ async function runDemoSeedMode(
   for (let offset = 3; offset >= 1; offset--) {
     const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
     await generateMonth(targetId, d.getFullYear(), d.getMonth() + 1, structure, customers, db, send);
+    step(`Month ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
 
   send('─'.repeat(40));
@@ -684,6 +699,10 @@ export async function POST(req: NextRequest) {
       const send = (msg: string) => {
         if (clientConnected) controller.enqueue(new TextEncoder().encode(`data: ${msg}\n\n`));
       };
+      // Pasos exactos para la barra de la página (lib/cloneProgress.ts).
+      const progress = (p: CloneProgress) => {
+        if (clientConnected) controller.enqueue(new TextEncoder().encode(`event: progress\ndata: ${JSON.stringify(p)}\n\n`));
+      };
       try {
         if (mode === 'rollback') {
           const db = createAdminClient();
@@ -692,12 +711,12 @@ export async function POST(req: NextRequest) {
           send(`Target : ${tgt.name}`);
           send(`Mode   : Rollback`);
           send('─'.repeat(40));
-          const cleaned = await rollback(target, db, send);
+          const cleaned = await rollback(target, db, send, progress);
           await logAdminAction(session, cleaned ? 'clone.rollback_finished' : 'clone.rollback_failed', { tenantId: target });
         } else if (mode === 'demo') {
-          await runDemoSeedMode(source!, target, excluded, send);
+          await runDemoSeedMode(source!, target, excluded, send, progress);
         } else {
-          await runOnboardingMode(source!, target, copyStock, excluded, send);
+          await runOnboardingMode(source!, target, copyStock, excluded, send, progress);
         }
         // Estos registros tampoco bloquean: el trabajo ya se hizo. Sin ellos la corrida pasa por interrumpida.
         if (mode !== 'rollback') await logAdminAction(session, 'clone.finished', { tenantId: target });
@@ -709,7 +728,7 @@ export async function POST(req: NextRequest) {
         } else {
           // Aquí el registro no bloquea: un clone a medias debe limpiarse igual.
           await logAdminAction(session, 'clone.auto_rollback', { tenantId: target, details: { error: msg } });
-          const cleaned = await rollback(target, createAdminClient(), send);
+          const cleaned = await rollback(target, createAdminClient(), send, progress);
           // Un clone a medias queda con datos y el destino ya no pasa el chequeo: Undo es el reintento.
           await logAdminAction(session, cleaned ? 'clone.rollback_finished' : 'clone.rollback_failed', { tenantId: target });
         }

@@ -57,11 +57,20 @@ Ver datos de un salón también queda registrado (`logAdminView`): el detalle, e
 - **Admin actions** las oculta por defecto. Se ven con **Include views** o filtrando por acción.
 - No se registran el listado de tenants, el dashboard ni los planes: no muestran datos de un salón en particular.
 
+## Exportar CSV
+
+**Export CSV** (arriba de los filtros) baja lo que muestra la tabla, con los mismos filtros (`lib/auditQuery.ts`, compartido con la lista): salón, acción, tabla, fechas e **Include views**. `POST /api/audit/export`.
+
+- Hasta 50.000 filas; con más, pide acotar los filtros (`413`).
+- Columnas: *Tenant activity* → `timestamp, tenant_id, tenant_name, action, table_name, record_id, user_id`. *Admin actions* → `created_at, admin_email, action, tenant_id, tenant_name, details` (JSON en una celda; los ids de una importación salen como cantidad).
+- Mismo formato que la exportación de un salón: BOM para Excel y celdas que Excel tomaría como fórmula neutralizadas.
+- Se registra `audit.export` con la vista, los filtros y la cantidad de filas **antes** de leer.
+
 ## Acciones registradas
 
 | Acción | Ruta | `details` |
 |---|---|---|
-| `view.tenant` · `view.staff` · `view.activity` · `view.integrations` | `GET /api/tenants/[id]` · `GET /api/tenants/[id]/users` · `GET /api/audit` · `GET /api/tenants/[id]/integrations` | — (el salón va en `tenant_id`; `null` si se miró la actividad de todos) |
+| `view.tenant` · `view.staff` · `view.activity` · `view.integrations` · `view.timeline` | `GET /api/tenants/[id]` · `GET /api/tenants/[id]/users` · `GET /api/audit` · `GET /api/tenants/[id]/integrations` · `GET /api/tenants/[id]/timeline` | — (el salón va en `tenant_id`; `null` si se miró la actividad de todos) |
 | `impersonate` | `POST /api/impersonate` | `email`, `reason` |
 | `impersonate.end` | `POST /api/impersonate/sessions/[sessionId]/end` | `session_id`, `opened_by`, `target_user_id` |
 | `user.magic_link` · `user.invite_resend` | `POST /api/tenants/[id]/users/[userId]/resend` | `email` |
@@ -79,5 +88,7 @@ Ver datos de un salón también queda registrado (`logAdminView`): el detalle, e
 | `import.finished` | `POST /api/import` | `entity`, `inserted`, `skipped`, `ids` (para Undo; la pantalla muestra la cantidad) |
 | `note.create` · `note.update` · `note.pin` · `note.unpin` · `note.delete` | `POST /api/tenants/[id]/notes` · `PATCH`/`DELETE /api/tenants/[id]/notes/[noteId]` | `note_id` (sin el texto) |
 | `announcement.create` · `announcement.update` · `announcement.end` | `POST /api/announcements` · `PATCH /api/announcements/[id]` · `POST /api/announcements/[id]/end` | `announcement_id`, `title`, `level`, fechas y `audience` · `was` al terminar |
+| `audit.export` | `POST /api/audit/export` | `view`, `filters`, `rows` |
+| `admin.mfa_reset` | `scripts/reset-mfa.mjs` (no es una ruta; `admin_email` = `script:<usuario>`) | `email`, `factors` |
 | `import.undone` · `import.undo_finished` | `POST /api/import/undo` | `importId`, `entity` · `removed`, `kept` |
 | `category.create` · `category.update` | `/api/categories/expense` | `name`, `type` · `id`, `changes` |

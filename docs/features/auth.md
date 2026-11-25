@@ -22,4 +22,14 @@ Autenticador TOTP de Supabase. La primera vez, `/mfa` muestra el QR para enrolar
 
 **Antes de desplegar:** confirmar en Supabase → Authentication → Multi-Factor que TOTP está activo en PROD. Si no, nadie puede enrolarse ni entrar al portal.
 
-**Teléfono perdido:** en Supabase → Authentication → Users, eliminar el factor del usuario. Al entrar, `/mfa` vuelve a enrolar.
+**Teléfono perdido** (verificado en DEV con `tests/e2e/mfa-recovery-e2e.mjs`):
+
+```bash
+node scripts/reset-mfa.mjs <email> .env.dev.local   # DEV
+node scripts/reset-mfa.mjs <email> .env.local       # PROD: pide escribir la referencia del proyecto
+```
+
+- Solo actúa sobre usuarios de `admin_superadmins`. Registra `admin.mfa_reset` en `admin_audit_logs` antes de borrar (`admin_email` = `script:<usuario del sistema>`); si no puede registrar, no toca nada.
+- Al entrar de nuevo con la contraseña, el portal manda a `/mfa`, que muestra un QR nuevo. Los códigos del autenticador perdido dejan de servir.
+- Equivale a borrar el factor en Supabase → Authentication → Users, que sigue sirviendo si no hay una terminal a mano.
+- **Las sesiones abiertas siguen vivas** hasta que vencen: borrar el factor no cierra sesión. Para un teléfono perdido no importa. **Si se sospecha que la cuenta está comprometida**, el corte inmediato es borrar a la persona de `admin_superadmins`: `assertSuperadmin()` lo consulta en cada pedido. Después, cambiar la contraseña y volver a agregarla.

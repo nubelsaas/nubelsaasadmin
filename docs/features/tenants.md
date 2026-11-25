@@ -140,6 +140,18 @@ Tarjeta **Internal notes** arriba de Setup. Notas del equipo sobre el salón (ll
 
 Migración: `supabase/migrations/20261125_admin_tenant_notes.sql` (a mano en DEV y en PROD desde el SQL editor). Sin la tabla, la tarjeta muestra el error y el resto del detalle funciona.
 
+### Timeline
+
+Tarjeta **Timeline** después de Integraciones: todo lo que pasó con el salón, lo más nuevo arriba (`lib/timeline.ts`, `GET /api/tenants/[id]/timeline`).
+
+- **Actions:** lo que el portal hizo sobre el salón (`admin_audit_logs`), con un título legible y el detalle útil: motivo, correo, qué campos cambiaron, filas importadas. Sin las vistas.
+- **Notes:** las notas internas (sin las borradas).
+- **Support:** cada sesión de soporte, como qué usuario, el motivo y cómo terminó (a mano, al tope de 60 minutos o todavía abierta). Reemplaza las filas `impersonate` del registro para no repetirlas.
+- **Announcements:** los anuncios que le llegaron (según su público actual), con cuántas personas del salón lo vieron y lo cerraron. Los programados no salen.
+- Filtro por tipo y de a 15 con **Show more**. Hasta 300 por fuente.
+- Muestra motivos y correos: se registra como `view.timeline`. Si la base no tiene una fuente (p. ej. PROD antes de su SQL), la omite y lo dice.
+- No incluye la actividad del app (`audit_log`): para eso, **Audit log** en los quick links.
+
 ### Setup (arranque del salón)
 
 Tarjeta **Setup** debajo de los quick links (`components/tenants/OnboardingCard.tsx`): qué pasos ya hizo el salón, con lo que se encontró o qué falta. Abierta mientras falte algo; cerrada cuando está completa.
@@ -309,6 +321,10 @@ El magic link es válido una sola vez y expira. Se puede regenerar desde el mism
 ---
 
 ## API Routes
+
+### `GET /api/tenants/[id]/timeline`
+
+Línea de tiempo: `{ items: [{ id, at, kind, title, detail, actor }], unavailable }`. Registra `view.timeline`. `404` si el salón no existe.
 
 ### `GET /api/tenants/[id]/notes` · `POST` · `PATCH|DELETE /api/tenants/[id]/notes/[noteId]`
 

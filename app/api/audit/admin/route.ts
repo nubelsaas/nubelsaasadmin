@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { assertSuperadmin } from '@/lib/assertSuperadmin';
+import { applyAuditFilters, compactDetails, readAuditFilters } from '@/lib/auditQuery';
 
 const PAGE_SIZE = 50;
 
@@ -8,27 +9,16 @@ export async function GET(req: NextRequest) {
   if (!await assertSuperadmin()) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
-  const tenantId = searchParams.get('tenantId') ?? null;
-  const action   = searchParams.get('action')   ?? null;
-  const from     = searchParams.get('from')     ?? null;
-  const to       = searchParams.get('to')       ?? null;
-  const page     = Math.max(0, parseInt(searchParams.get('page') ?? '0'));
-  const views    = searchParams.get('views') === '1';
+  const filters = readAuditFilters(name => searchParams.get(name));
+  const page    = Math.max(0, parseInt(searchParams.get('page') ?? '0'));
 
   const db = createAdminClient();
 
-  let q = db
+  const q = applyAuditFilters(db
     .from('admin_audit_logs')
     .select('id, admin_email, action, tenant_id, details, created_at', { count: 'exact' })
     .order('created_at', { ascending: false })
-    .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-  if (tenantId) q = q.eq('tenant_id', tenantId);
-  if (action)   q = q.ilike('action', `%${action}%`);
-  // Las vistas son muchas y rutinarias: se muestran solo si se piden o se filtra por acción.
-  if (!views && !action) q = q.not('action', 'like', 'view.%');
-  if (from)     q = q.gte('created_at', from);
-  if (to)       q = q.lte('created_at', to + 'T23:59:59Z');
+    .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1), 'admin', filters);
 
   const { data, count, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -42,12 +32,7 @@ export async function GET(req: NextRequest) {
   const names = new Map((tenants ?? []).map(t => [t.id, t.name]));
 
   return NextResponse.json({
-    rows: rows.map(r => ({
-      ...r,
-      // Una importación guarda miles de ids para poder deshacerla: en pantalla basta la cantidad.
-      details: Array.isArray(r.details?.ids) ? { ...r.details, ids: r.details.ids.length } : r.details,
-      tenant_name: names.get(r.tenant_id) ?? null,
-    })),
+    rows: rows.map(r => ({ ...r, details: compactDetails(r.details), tenant_name: names.get(r.tenant_id) ?? null })),
     total: count ?? 0,
     pageSize: PAGE_SIZE,
   });

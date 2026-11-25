@@ -22,6 +22,18 @@ Herramienta para crear nuevos tenants a partir de uno existente. Tiene tres modo
 
 Todos los modos usan **Server-Sent Events (SSE)**. La UI recibe cada línea en tiempo real y la muestra en un panel tipo terminal, sin necesidad de refrescar la página. El botón activo muestra un estado de "en progreso" mientras el stream está abierto.
 
+### Barra de progreso
+
+El servidor manda pasos exactos como evento SSE `progress` (`{ phase, done, total, label }`, `lib/cloneProgress.ts`), aparte de las líneas del log:
+
+| Modo | Pasos |
+|---|---|
+| Onboarding | 1 (mapas de ids) + una por tabla incluida |
+| Demo Seed | 1 + una por tabla + estructura + clientes + 3 meses |
+| Rollback | una por tabla de `ROLLBACK_ORDER` (28) |
+
+La página muestra "Step N of M · tabla". Las tablas desmarcadas no cuentan. Si un clone falla, el rollback automático empieza su propia cuenta y la barra pasa a ámbar ("Rolling back after an error"). La página arma los eventos con `parseSse`, que guarda lo que llega partido entre dos lecturas del stream.
+
 ### Colores del log
 
 | Prefijo | Color | Significado |

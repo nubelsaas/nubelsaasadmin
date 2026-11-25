@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Play, RotateCcw, ChevronDown, ChevronUp, Search, Plus, CheckCircle, XCircle, Loader, ShieldCheck } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
 import { useAskDialog } from '@/components/shared/AskDialog';
+import { parseSse, progressPercent, type CloneProgress } from '@/lib/cloneProgress';
 
 // ── Table definitions ──────────────────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ export default function ClonePage() {
 
   // Log
   const [log, setLog] = useState<string[]>([]);
+  const [progress, setProgress] = useState<CloneProgress | null>(null);
   const { ask, dialog } = useAskDialog();
   const [running, setRunning] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -251,6 +253,7 @@ export default function ClonePage() {
     setTargetState({ status: 'empty', tenant: { id: json.id, name: targetSearch.trim() } });
   }
 
+  // Los eventos pueden llegar partidos entre lecturas: parseSse guarda lo incompleto para la siguiente.
   async function readStream(payload: Record<string, unknown>, onLine: (line: string) => void) {
     const res = await fetch('/api/clone/stream', {
       method: 'POST',
@@ -261,12 +264,18 @@ export default function ClonePage() {
     if (!res.body) throw new Error('No stream');
     const reader = res.body.getReader();
     const dec = new TextDecoder();
+    let buffer = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      for (const raw of dec.decode(value).split('\n')) {
-        const line = raw.replace(/^data: /, '').trim();
-        if (line) onLine(line);
+      const parsed = parseSse(buffer + dec.decode(value, { stream: true }));
+      buffer = parsed.rest;
+      for (const e of parsed.events) {
+        if (e.event === 'progress') {
+          try { setProgress(JSON.parse(e.data) as CloneProgress); } catch { /* evento dañado: se ignora */ }
+        } else if (e.data.trim()) {
+          onLine(e.data.trimEnd());
+        }
       }
     }
   }
@@ -278,6 +287,7 @@ export default function ClonePage() {
     setRunning(true);
     setActiveOp(mode);
     setClonedTarget(null);
+    setProgress(null);
     setLog(['Starting…']);
 
     const payload = {
@@ -345,6 +355,7 @@ export default function ClonePage() {
 
     setRunning(true);
     setActiveOp('rollback');
+    setProgress(null);
     setLog([`Undoing clone on "${target.name}"…`]);
 
     try {
@@ -362,16 +373,12 @@ export default function ClonePage() {
   const includedCount = activeTables.filter(t => !fullyExcluded.has(t)).length;
   const canRun = !!sourceTenant && targetState.status === 'empty' && (!!existingAdmin || adminValid) && !running;
 
-  const TOTAL_STEPS: Record<string, number> = { onboarding: 11, demo: 24, rollback: 20 };
-  const completions = log.filter(l =>
-    l.startsWith('✓') || l.startsWith('✅') || l.startsWith('⏭') || l.startsWith('↩️')
-  ).length;
+  // Pasos exactos que manda el servidor (lib/cloneProgress.ts). Si un clone falla, el servidor
+  // deshace lo hecho y la barra pasa a contar el rollback.
   const isDone = log.some(l => l.startsWith('✅') || l.startsWith('↩️'));
-  const progressPct = isDone
-    ? 100
-    : running
-      ? Math.min(92, Math.round(completions / (TOTAL_STEPS[activeOp ?? 'onboarding'] ?? 15) * 100))
-      : 0;
+  const failed = log.some(l => l.startsWith('❌') || l.startsWith('Error:'));
+  const progressPct = isDone && !failed ? 100 : progressPercent(progress);
+  const rollingBack = progress?.phase === 'rollback' && activeOp !== 'rollback';
 
   const MODES = [
     {
@@ -628,16 +635,23 @@ export default function ClonePage() {
         {log.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden" role="progressbar"
+                aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Clone progress">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    progressPct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'
+                    failed || rollingBack ? 'bg-amber-500' : progressPct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'
                   } ${running && progressPct === 0 ? 'animate-pulse w-full opacity-30' : ''}`}
                   style={{ width: progressPct > 0 ? `${progressPct}%` : undefined }}
                 />
               </div>
               <span className="text-xs font-mono text-slate-400 w-8 text-right">{progressPct}%</span>
             </div>
+            {progress && (
+              <p className="text-xs text-slate-500" data-testid="clone-step">
+                {rollingBack ? 'Rolling back after an error · ' : ''}
+                Step {progress.done} of {progress.total}{progress.done > 0 ? ` · ${progress.label}` : ''}
+              </p>
+            )}
             <div ref={logRef} className="bg-slate-900 rounded-2xl p-4 font-mono text-xs text-slate-300 space-y-1 max-h-72 overflow-y-auto no-scrollbar">
               {log.map((line, i) => (
                 <p key={i} className={
