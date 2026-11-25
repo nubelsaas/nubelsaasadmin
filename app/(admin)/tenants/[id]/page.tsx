@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import AdminHeader from '@/components/layout/AdminHeader';
 import { useAskDialog } from '@/components/shared/AskDialog';
+import IntegrationsCard from '@/components/tenants/IntegrationsCard';
 
 type Tenant = {
   id: string; name: string; admin_email: string | null;
@@ -336,6 +337,8 @@ export default function TenantDetailPage() {
             <ExternalLink size={12} /> Open app
           </a>
         </div>
+
+        <IntegrationsCard tenantId={tenant.id} />
 
         {/* Public booking link — the salon's shareable /book portal URL */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabaseAdmin';
 
 export const AUDIT_FAILED = 'Could not write the audit log. The action was not performed.';
 
-export type AdminView = 'view.tenant' | 'view.staff' | 'view.activity';
+export type AdminView = 'view.tenant' | 'view.staff' | 'view.activity' | 'view.integrations';
 
 export type AdminAction =
   | AdminView

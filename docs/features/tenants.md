@@ -126,6 +126,21 @@ Todos vía `PATCH /api/tenants/[id]` (service role).
 
 Botones de acceso rápido a: Feature Flags, Impersonate, Clone, Audit log, Open app.
 
+### Integraciones
+
+Tarjeta **Integrations** debajo de los quick links (`components/tenants/IntegrationsCard.tsx`). Muestra, para los últimos 30 días, el estado de cada integración según lo que el app principal registra: **Working**, **Check**, **Failing**, **Off** o **N/A** (no existe en esta base). La primera que falla se abre sola con sus errores recientes.
+
+| Integración | Lee | Failing | Check |
+|---|---|---|---|
+| Email | `notification_jobs` de tipo `*_email_*`, `clientReminders.email`, `admin_email` | Un recordatorio `dead` | Uno reintentando (`last_error` con intentos) |
+| WhatsApp | `whatsapp_integrations`, `whatsapp_outbound_messages` | Todas las conexiones caídas, o el último mensaje falló | Fallos anteriores con envíos buenos después |
+| Google Calendar | `user_google_tokens` (sin leer tokens), `appointments.google_event_id` | Acceso vencido y sin refresh token: hay que reconectar | Sin refresh token, aún sin vencer |
+| Push | `push_devices`, `notification_delivery_log`, `notification_jobs` que no son de email | Un recordatorio al equipo `dead` | Entregas `FAILED`/`REJECTED`, o todas las suscripciones vencidas |
+
+**Límites:** los correos de confirmación, recibo y login no dejan registro, así que sus fallas no aparecen. PROD (`main`) aún no tiene el log de mensajes de WhatsApp ni las columnas de estado de la conexión: la tarjeta lo dice y muestra lo que hay.
+
+Reglas en `lib/integrationRules.ts` (probadas en `tests/integrationRules.test.mjs`), lectura en `lib/integrationHealth.ts`: una tabla o columna inexistente se muestra como N/A, no rompe la tarjeta. Nunca pide `access_token`, `refresh_token`, `verify_token` ni las llaves de push: de `user_google_tokens` solo saber si hay refresh token, con un filtro.
+
 ### Exportar datos
 
 Tarjeta **Export data** en el detalle. Pide un motivo y descarga un ZIP con un CSV por tabla y un `LEEME.txt` (`lib/tenantExport.ts`). También funciona con un tenant suspendido, porque solo lee.
@@ -261,6 +276,10 @@ El magic link es válido una sola vez y expira. Se puede regenerar desde el mism
 ---
 
 ## API Routes
+
+### `GET /api/tenants/[id]/integrations`
+
+Estado de email, WhatsApp, Google Calendar y push del salón: `{ level, integrations: [{ key, label, level, summary, details, errors }], generatedAt }`. Registra `view.integrations` (muestra correos del equipo y errores de envío). `404` si el salón no existe.
 
 ### `GET /api/tenants`
 Retorna lista para el listado: `id, name, admin_email, created_at, country_iso`.

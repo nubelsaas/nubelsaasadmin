@@ -95,6 +95,8 @@
 - [x] Lista de tenants: filtros (plan, estado, país, salud), orden y filtros en la URL
 - [x] Diálogo propio para motivos y confirmaciones (`components/shared/AskDialog.tsx`) en vez de `window.prompt`
 - [x] Flags: sección del plan, con las funciones que aún no tienen efecto marcadas
+- [x] Sesiones de soporte: tope de 60 minutos, lista de activas y End
+- [x] Integraciones por salón (email, WhatsApp, Google Calendar, push) en el detalle
 
 ---
 
