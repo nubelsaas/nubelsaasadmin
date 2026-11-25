@@ -8,6 +8,7 @@ import AdminHeader from '@/components/layout/AdminHeader';
 import { useAskDialog } from '@/components/shared/AskDialog';
 import IntegrationsCard from '@/components/tenants/IntegrationsCard';
 import OnboardingCard from '@/components/tenants/OnboardingCard';
+import NotesCard from '@/components/tenants/NotesCard';
 
 type Tenant = {
   id: string; name: string; admin_email: string | null;
@@ -338,6 +339,8 @@ export default function TenantDetailPage() {
             <ExternalLink size={12} /> Open app
           </a>
         </div>
+
+        <NotesCard tenantId={tenant.id} />
 
         <OnboardingCard tenantId={tenant.id} />
 

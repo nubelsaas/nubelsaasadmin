@@ -127,6 +127,19 @@ Todos vía `PATCH /api/tenants/[id]` (service role).
 
 Botones de acceso rápido a: Feature Flags, Impersonate, Clone, Audit log, Open app.
 
+### Notas internas
+
+Tarjeta **Internal notes** arriba de Setup. Notas del equipo sobre el salón (llamadas, acuerdos, problemas). **El salón no las ve:** viven en `admin_tenant_notes`, con RLS sin políticas, y solo las leen las rutas del portal.
+
+- Cualquier admin agrega una nota y fija o suelta cualquiera. Las fijadas van arriba, en ámbar; después, la más nueva primero.
+- Solo quien la escribió la edita o la borra. Si se guardó más de un minuto después de crearla, dice "(edited)". Fijar no cuenta como edición.
+- Borrar la oculta (`deleted_at`, `deleted_by_email`): el texto queda en la tabla.
+- Hasta 5000 caracteres (`lib/tenantNotes.ts` y un `CHECK` en la tabla).
+- Cada cambio se registra: `note.create`, `note.update`, `note.pin`, `note.unpin`, `note.delete`, con el `note_id` y sin el texto. Leerlas no se registra: no son datos del salón.
+- No bloquean borrar el salón ni clonar sobre él (`EMPTY_TENANT_TABLES`). Al borrar el salón se borran con él (`ON DELETE CASCADE`). No van en la exportación.
+
+Migración: `supabase/migrations/20261125_admin_tenant_notes.sql` (a mano en DEV y en PROD desde el SQL editor). Sin la tabla, la tarjeta muestra el error y el resto del detalle funciona.
+
 ### Setup (arranque del salón)
 
 Tarjeta **Setup** debajo de los quick links (`components/tenants/OnboardingCard.tsx`): qué pasos ya hizo el salón, con lo que se encontró o qué falta. Abierta mientras falte algo; cerrada cuando está completa.
@@ -186,7 +199,7 @@ Tarjeta en el detalle que marca o desmarca el tenant como origen de clones (`fea
 
 Tarjeta **Delete tenant** al final del detalle. Hay que escribir el nombre exacto del tenant para confirmar, y no se puede deshacer.
 
-**Solo se borran tenants vacíos.** Se usa el criterio del destino de un clone (`findTargetData`) y además se revisan **todas** las tablas con `tenant_id`, leídas en vivo de la API (`lib/tenantTables.ts`): solo pueden tener filas `users`, `roles`, `audit_log` y `admin_audit_logs`. Si se quedó con datos de un clone, primero usar Undo. `audit_log` no bloquea, y su historial se borra con el tenant.
+**Solo se borran tenants vacíos.** Se usa el criterio del destino de un clone (`findTargetData`) y además se revisan **todas** las tablas con `tenant_id`, leídas en vivo de la API (`lib/tenantTables.ts`): solo pueden tener filas `users`, `roles`, `audit_log`, `admin_audit_logs` y `admin_tenant_notes`. Si se quedó con datos de un clone, primero usar Undo. `audit_log` no bloquea, y su historial se borra con el tenant.
 
 Al borrar:
 - Las FK en cascada eliminan `users`, `roles`, `audit_log` y demás filas del tenant. `trg_guard_last_superadmin` no bloquea porque el tenant ya no existe cuando llega la cascada.
@@ -296,6 +309,10 @@ El magic link es válido una sola vez y expira. Se puede regenerar desde el mism
 ---
 
 ## API Routes
+
+### `GET /api/tenants/[id]/notes` · `POST` · `PATCH|DELETE /api/tenants/[id]/notes/[noteId]`
+
+Notas internas. `GET` devuelve `{ notes, userId }` (sin las borradas). `POST { body }` crea (`404` si el salón no existe). `PATCH { body }` edita y `PATCH { pinned }` fija o suelta. `DELETE` oculta. Editar o borrar una nota ajena da `403`.
 
 ### `GET /api/tenants/[id]/integrations`
 
@@ -433,3 +450,5 @@ La tabla `tenants` **no tiene**: `is_active`, `slug`, `contact_email`, `plan` (t
 | `app/api/tenants/[id]/admin/route.ts` | POST crear admin en tenant existente |
 | `app/api/tenants/[id]/users/[userId]/resend/route.ts` | POST resend invite · magic link |
 | `lib/createAdminUser.ts` | Shared: crea role + auth user + users row |
+| `components/tenants/NotesCard.tsx` · `lib/tenantNotes.ts` | Notas internas: tarjeta y reglas |
+| `app/api/tenants/[id]/notes/route.ts` · `[noteId]/route.ts` | GET/POST notas · PATCH/DELETE una nota |

@@ -34,7 +34,12 @@ export type AdminAction =
   | 'import.undone'
   | 'import.undo_finished'
   | 'category.create'
-  | 'category.update';
+  | 'category.update'
+  | 'note.create'
+  | 'note.update'
+  | 'note.pin'
+  | 'note.unpin'
+  | 'note.delete';
 
 /**
  * Registra una acción del portal en admin_audit_logs. Se llama ANTES de ejecutarla: si devuelve
