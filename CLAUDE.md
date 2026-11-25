@@ -11,6 +11,7 @@ docs/
 │   ├── flags.md
 │   ├── impersonate.md
 │   ├── audit.md       ← Audit Log y regla de registro de escrituras
+│   ├── announcements.md ← Avisos a los salones (tablas en nubelsaas)
 │   ├── auth.md        ← Acceso: getUser, superadmin y MFA
 │   ├── entornos.md    ← PROD vs DEV (leer antes de correr el portal)
 │   └── import.md      ← CSV: duplicados, salón en operación y Undo
@@ -89,6 +90,8 @@ Rutas ya creadas:
 - `POST /api/impersonate` — abrir sesión de soporte, marcada en `audit_log` del app (requiere `reason`)
 - `GET /api/impersonate/sessions` — sesiones de soporte vivas
 - `POST /api/impersonate/sessions/[sessionId]/end` — cerrar una sesión de soporte
+- `POST /api/tenants/[id]/notes` · `PATCH|DELETE /api/tenants/[id]/notes/[noteId]` — notas internas del salón
+- `POST /api/announcements` · `PATCH /api/announcements/[id]` · `POST /api/announcements/[id]/end` — anuncios a los salones
 - `POST /api/clone/stream` — SSE clone progress
 
 ## Auth

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Building2, Copy, Upload, Flag, UserCog, ScrollText, LogOut, Tag } from 'lucide-react';
+import { LayoutDashboard, Building2, Copy, Upload, Flag, UserCog, ScrollText, LogOut, Tag, Megaphone } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
@@ -13,6 +13,7 @@ const NAV = [
   { href: '/flags',       label: 'Feature Flags',  icon: Flag },
   { href: '/categories',  label: 'Categories',     icon: Tag },
   { href: '/impersonate', label: 'Impersonate',    icon: UserCog },
+  { href: '/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/audit',       label: 'Audit Log',      icon: ScrollText },
 ];
 

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-// Lo que queda en un tenant vacío: su admin, su rol, el historial y las notas del portal.
-export const EMPTY_TENANT_TABLES = new Set(['users', 'roles', 'audit_log', 'admin_audit_logs', 'admin_tenant_notes']);
+// Lo que queda en un tenant vacío: su admin, su rol, el historial, las notas del portal y quién vio cada anuncio.
+export const EMPTY_TENANT_TABLES = new Set(['users', 'roles', 'audit_log', 'admin_audit_logs', 'admin_tenant_notes', 'admin_announcement_receipts']);
 
 /** Todas las tablas con `tenant_id`, leídas de la API: incluye las que el app principal agregue. */
 async function listTenantTables(): Promise<string[]> {

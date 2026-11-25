@@ -39,7 +39,10 @@ export type AdminAction =
   | 'note.update'
   | 'note.pin'
   | 'note.unpin'
-  | 'note.delete';
+  | 'note.delete'
+  | 'announcement.create'
+  | 'announcement.update'
+  | 'announcement.end';
 
 /**
  * Registra una acción del portal en admin_audit_logs. Se llama ANTES de ejecutarla: si devuelve

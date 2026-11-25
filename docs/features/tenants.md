@@ -199,7 +199,7 @@ Tarjeta en el detalle que marca o desmarca el tenant como origen de clones (`fea
 
 Tarjeta **Delete tenant** al final del detalle. Hay que escribir el nombre exacto del tenant para confirmar, y no se puede deshacer.
 
-**Solo se borran tenants vacíos.** Se usa el criterio del destino de un clone (`findTargetData`) y además se revisan **todas** las tablas con `tenant_id`, leídas en vivo de la API (`lib/tenantTables.ts`): solo pueden tener filas `users`, `roles`, `audit_log`, `admin_audit_logs` y `admin_tenant_notes`. Si se quedó con datos de un clone, primero usar Undo. `audit_log` no bloquea, y su historial se borra con el tenant.
+**Solo se borran tenants vacíos.** Se usa el criterio del destino de un clone (`findTargetData`) y además se revisan **todas** las tablas con `tenant_id`, leídas en vivo de la API (`lib/tenantTables.ts`): solo pueden tener filas `users`, `roles`, `audit_log`, `admin_audit_logs`, `admin_tenant_notes` y `admin_announcement_receipts` (quién vio cada anuncio). Si se quedó con datos de un clone, primero usar Undo. `audit_log` no bloquea, y su historial se borra con el tenant.
 
 Al borrar:
 - Las FK en cascada eliminan `users`, `roles`, `audit_log` y demás filas del tenant. `trg_guard_last_superadmin` no bloquea porque el tenant ya no existe cuando llega la cascada.

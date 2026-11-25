@@ -99,6 +99,7 @@
 - [x] Integraciones por salón (email, WhatsApp, Google Calendar, push) en el detalle
 - [x] Checklist de arranque (Setup) por salón, con filtros Setup incomplete / Stuck en la lista
 - [x] Notas internas por salón (`admin_tenant_notes`): fijar, editar y borrar, con registro en el audit log
+- [x] Anuncios a los salones (`/announcements`): público por plan, país, salón y dueños; vista previa, alcance y conteo de vistos. El aviso en el app vive en nubelsaas (`feat/announcements`)
 
 ---
 

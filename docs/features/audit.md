@@ -78,5 +78,6 @@ Ver datos de un salón también queda registrado (`logAdminView`): el detalle, e
 | `import` | `POST /api/import` | `entity`, `records`, `skipped`, `live` |
 | `import.finished` | `POST /api/import` | `entity`, `inserted`, `skipped`, `ids` (para Undo; la pantalla muestra la cantidad) |
 | `note.create` · `note.update` · `note.pin` · `note.unpin` · `note.delete` | `POST /api/tenants/[id]/notes` · `PATCH`/`DELETE /api/tenants/[id]/notes/[noteId]` | `note_id` (sin el texto) |
+| `announcement.create` · `announcement.update` · `announcement.end` | `POST /api/announcements` · `PATCH /api/announcements/[id]` · `POST /api/announcements/[id]/end` | `announcement_id`, `title`, `level`, fechas y `audience` · `was` al terminar |
 | `import.undone` · `import.undo_finished` | `POST /api/import/undo` | `importId`, `entity` · `removed`, `kept` |
 | `category.create` · `category.update` | `/api/categories/expense` | `name`, `type` · `id`, `changes` |

@@ -53,7 +53,7 @@ async function portalAdmin(n) {
 }
 
 try {
-  const probe = await db.from('admin_tenant_notes').select('id', { head: true, count: 'exact' }).limit(1);
+  const probe = await db.from('admin_tenant_notes').select('id').limit(1);   // sin head: con head un 404 no trae mensaje
   if (probe.error) throw new Error(`admin_tenant_notes is missing on DEV: ${probe.error.message}`);
 
   await db.from('tenants').insert(TENANT).throwOnError();
