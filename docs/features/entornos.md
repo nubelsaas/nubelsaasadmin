@@ -46,3 +46,8 @@ Plantilla: `.env.example`. Los dos archivos están en `.gitignore`.
 
 `main` y `dev` en GitHub (`nubelsaas/nubelsaasadmin`). Las ramas organizan el código; **no**
 cambian la base: eso lo decide solo el comando de arranque.
+
+
+## Antes de desplegar a PROD
+
+Abrir **Schema** (`/schema`) con `npm run dev:prod`: **Portal readiness** dice qué le falta a PROD para esta versión del portal. Para la lista completa de diferencias con DEV, `node scripts/schema-diff.mjs` (`docs/features/schema.md`).

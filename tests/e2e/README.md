@@ -14,6 +14,7 @@ No corren en CI ni con `npm test` (solo toma `tests/*.test.mjs`).
 | `quickwins-e2e.mjs` | Lista de tenants (búsqueda, filtros, orden, URL), salud por salón, plan en Flags y diálogo de motivos. Usa Playwright con un navegador real | Sí |
 | `integrations-e2e.mjs` | Tarjeta de integraciones: un salón con una falla conocida en email, WhatsApp, Google y push; que no salgan tokens. Usa Playwright | Sí |
 | `announcements-e2e.mjs` | Anuncios: público por plan, país, salón y dueños; cerrar por persona; críticos; que el app no lea las tablas; edición, fin, registro y la página. Usa Playwright. Necesita `announcements.sql` de nubelsaas en DEV | Sí |
+| `schema-e2e.mjs` | Página Schema: lee DEV sin filas ni claves, readiness, descarga y comparación con una copia modificada. No crea salones. Usa Playwright | Sí |
 | `notes-e2e.mjs` | Notas internas: crear, fijar, editar, borrar, permisos entre dos admins, registro en el audit log y que no bloquean borrar el salón. Usa Playwright. Necesita `20261125_admin_tenant_notes.sql` en DEV | Sí |
 | `onboarding-e2e.mjs` | Checklist Setup: un salón nuevo, uno atascado y uno completo; filtros e insignias de la lista. Usa Playwright | Sí |
 
@@ -32,6 +33,7 @@ PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/integrations
 PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/onboarding-e2e.mjs
 PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/notes-e2e.mjs
 PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/announcements-e2e.mjs
+PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/schema-e2e.mjs
 ```
 
 `alias-loader.mjs` resuelve `@/…` e imports `.ts` sin extensión como lo hace Next; solo lo necesita `health-e2e.mjs`.

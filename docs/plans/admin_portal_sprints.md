@@ -100,6 +100,7 @@
 - [x] Checklist de arranque (Setup) por salón, con filtros Setup incomplete / Stuck en la lista
 - [x] Notas internas por salón (`admin_tenant_notes`): fijar, editar y borrar, con registro en el audit log
 - [x] Anuncios a los salones (`/announcements`): público por plan, país, salón y dueños; vista previa, alcance y conteo de vistos. El aviso en el app vive en nubelsaas (`feat/announcements`)
+- [x] Schema (`/schema`): estructura de la base, lo que necesita el portal y comparación DEV vs PROD (página y `scripts/schema-diff.mjs`)
 
 ---
 

@@ -12,6 +12,7 @@ docs/
 │   ├── impersonate.md
 │   ├── audit.md       ← Audit Log y regla de registro de escrituras
 │   ├── announcements.md ← Avisos a los salones (tablas en nubelsaas)
+│   ├── schema.md      ← DEV vs PROD: estructura y lo que necesita el portal
 │   ├── auth.md        ← Acceso: getUser, superadmin y MFA
 │   ├── entornos.md    ← PROD vs DEV (leer antes de correr el portal)
 │   └── import.md      ← CSV: duplicados, salón en operación y Undo

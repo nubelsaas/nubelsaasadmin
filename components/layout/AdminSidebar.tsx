@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Building2, Copy, Upload, Flag, UserCog, ScrollText, LogOut, Tag, Megaphone } from 'lucide-react';
+import { LayoutDashboard, Building2, Copy, Upload, Flag, UserCog, ScrollText, LogOut, Tag, Megaphone, Database } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
@@ -15,6 +15,7 @@ const NAV = [
   { href: '/impersonate', label: 'Impersonate',    icon: UserCog },
   { href: '/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/audit',       label: 'Audit Log',      icon: ScrollText },
+  { href: '/schema',      label: 'Schema',         icon: Database },
 ];
 
 export default function AdminSidebar() {
