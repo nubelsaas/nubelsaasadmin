@@ -63,7 +63,9 @@ export function diffSnapshots(here: SchemaSnapshot, there: SchemaSnapshot): Diff
 
   const tablesHere = Object.keys(here.tables);
   const tablesThere = Object.keys(there.tables);
-  out.push(...compareBy('table', tablesHere, tablesThere, t => t, () => null));
+  // La API mezcla tablas y vistas: contra ella, las vistas del catálogo cuentan como tablas.
+  const asApi = (s: SchemaSnapshot) => (full || s.source === 'api' ? Object.keys(s.tables) : [...Object.keys(s.tables), ...s.views]);
+  out.push(...compareBy('table', asApi(here), asApi(there), t => t, () => null));
 
   for (const t of tablesHere.filter(x => there.tables[x])) {
     const ta = here.tables[t], tb = there.tables[t];
@@ -97,8 +99,11 @@ export function diffSnapshots(here: SchemaSnapshot, there: SchemaSnapshot): Diff
     out.push(...compareBy('extension', Object.keys(here.extensions), Object.keys(there.extensions), e => e, (e) =>
       here.extensions[e] !== there.extensions[e] ? `version ${here.extensions[e]} vs ${there.extensions[e]}` : null));
   } else {
-    // Sin catálogo solo se saben los nombres de las funciones expuestas.
-    const names = (s: SchemaSnapshot) => Array.from(new Set(s.functions.map(f => f.name)));
+    // Sin catálogo solo se saben los nombres de las funciones que publica la API: las de trigger
+    // nunca aparecen ahí, así que del lado del catálogo no se cuentan.
+    const names = (s: SchemaSnapshot) => Array.from(new Set(
+      s.functions.filter(f => s.source === 'api' || !/^(event_)?trigger$/.test(f.returns)).map(f => f.name),
+    ));
     out.push(...compareBy('function', names(here), names(there), f => f, () => null));
   }
   return out;

@@ -69,7 +69,21 @@ test('against an API-only snapshot, only names are compared', () => {
   api.tables = structuredClone(api.tables);
   api.tables.tenants.columns[1] = col('name', 'character varying', true);
   api.tables.users.rls = null;
+  api.tables.v_sales = { rls: null, columns: [] };   // la API lista las vistas como tablas
   assert.deepEqual(keys(diffSnapshots(snap(), api)), ['function:only_there:g']);
+});
+
+test('against the API: views count as tables and trigger functions are skipped', () => {
+  const cat = snap({ functions: [
+    { name: 'f', args: 'p uuid', returns: 'void', security_definer: true, hash: 'a' },
+    { name: 'trg_fn', args: '', returns: 'trigger', security_definer: false, hash: 'b' },
+  ] });
+  const api = snap({
+    source: 'api', views: [], triggers: [], policies: [], indexes: [], enums: {}, extensions: {},
+    functions: [{ name: 'f', args: '', returns: '', security_definer: false, hash: '' }],
+  });
+  api.tables = { ...structuredClone(api.tables), v_sales: { rls: null, columns: [] } };
+  assert.deepEqual(keys(diffSnapshots(cat, api)), []);
 });
 
 test('summary counts by category', () => {
