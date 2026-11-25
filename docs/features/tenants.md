@@ -16,10 +16,11 @@ Gestión completa de tenants: listado con búsqueda, creación de nuevos tenants
 
 ### Funcionalidades
 - **Búsqueda** por nombre o correo de contacto, sin distinguir tildes ni mayúsculas. Varias palabras deben aparecer todas. Un `%` o `_` es texto, no comodín.
-- **Filtros:** plan (o sin plan), estado (activo / suspendido), país (o sin país), salud y **Needs attention**.
+- **Filtros:** plan (o sin plan), estado (activo / suspendido), país (o sin país), salud y **Needs attention**, y arranque (**Setup incomplete** / **Stuck**, ver *Setup* en el detalle).
+- **Insignia de arranque:** `Stuck 3/5` (ámbar) o `Setup 6/7` (gris, solo desde `sm`) en los salones sin terminar; el título dice el paso que falta. La da `GET /api/tenants/onboarding`, que llega aparte como la salud.
 - **Orden:** nombre A–Z, más nuevos o más antiguos. Dentro de cada país se respeta el orden elegido.
 - **Agrupación por país** con emoji flags, y contador "N of M tenants".
-- **Los filtros viven en la URL** (`?q=&plan=&status=&country=&health=&sort=`): al volver desde un salón la lista sigue filtrada, y se puede compartir el enlace. **Clear filters** los quita.
+- **Los filtros viven en la URL** (`?q=&plan=&status=&country=&health=&setup=&sort=`): al volver desde un salón la lista sigue filtrada, y se puede compartir el enlace. **Clear filters** los quita.
 - **Crear nuevo tenant** — botón "New" abre el `TenantCreateModal`
 
 La lista y los filtros salen de `lib/tenantFilters.ts` (probado en `tests/tenantFilters.test.mjs`). La API `GET /api/tenants?search=` usa la misma búsqueda, así que la del encabezado (`AdminHeader`) también encuentra por correo.
@@ -125,6 +126,25 @@ Todos vía `PATCH /api/tenants/[id]` (service role).
 ### Quick links
 
 Botones de acceso rápido a: Feature Flags, Impersonate, Clone, Audit log, Open app.
+
+### Setup (arranque del salón)
+
+Tarjeta **Setup** debajo de los quick links (`components/tenants/OnboardingCard.tsx`): qué pasos ya hizo el salón, con lo que se encontró o qué falta. Abierta mientras falte algo; cerrada cuando está completa.
+
+| Paso | Hecho cuando | Notas |
+|---|---|---|
+| Owner signed in | Un dueño activo (`can_do_everything`) tiene `last_sign_in_at` en Auth | Auth guarda solo el último ingreso, no el primero |
+| Services added | `products_services` con `type = 'service'` y `is_active` | Retail e insumos no cuentan |
+| Payment methods set up | `payment_accounts` activa | Un salón nuevo no trae ninguna: sin esto el POS no registra ventas |
+| Team added | Más de un usuario activo | **Opcional**: no cuenta para el progreso (salón de una persona) |
+| Customers added | Al menos un `customers` | Se pueden importar de un CSV |
+| First appointment | Al menos un `appointments` | Solo si el Scheduler está encendido (override o, si no hay, el plan) |
+| Public booking on | `feature_overrides.publicAllowedServices` no vacío | Solo con Scheduler |
+| First sale | `transactions` no anulada; la fecha es la más antigua | |
+
+**Stuck:** 14 días o más desde el alta (`created_at`) y todavía sin la primera venta: nunca arrancó. Un salón que vende pero no publicó su agenda está **incompleto**, no atascado.
+
+Reglas en `lib/onboardingRules.ts` (`tests/onboardingRules.test.mjs`), lectura en `lib/onboarding.ts`: solo conteos (`head: true`) y fechas, sin datos de clientes ni de ventas, por eso no se registra como lectura. Rutas: `GET /api/tenants/[id]/onboarding` (detalle) y `GET /api/tenants/onboarding` (resumen de todos para la lista).
 
 ### Integraciones
 

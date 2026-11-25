@@ -11,6 +11,7 @@ import {
   DEFAULT_FILTERS, filterTenants, filtersFromParams, filtersToParams, sortTenants,
   type HealthSummary, type ListTenant, type TenantFilters,
 } from '@/lib/tenantFilters';
+import type { OnboardingBrief } from '@/app/api/tenants/onboarding/route';
 
 type Plan = { id: string; name: string };
 
@@ -34,6 +35,8 @@ function TenantsList() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [health, setHealth] = useState<Record<string, HealthSummary> | null>(null);
   const [healthError, setHealthError] = useState(false);
+  const [setup, setSetup] = useState<Record<string, OnboardingBrief> | null>(null);
+  const [setupError, setSetupError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -78,7 +81,14 @@ function TenantsList() {
     else setHealthError(true);
   }, []);
 
-  useEffect(() => { load(); loadHealth(); }, [load, loadHealth]);
+  const loadSetup = useCallback(async () => {
+    setSetupError(false);
+    const res = await fetch('/api/tenants/onboarding');
+    if (res.ok) setSetup(await res.json());
+    else setSetupError(true);
+  }, []);
+
+  useEffect(() => { load(); loadHealth(); loadSetup(); }, [load, loadHealth, loadSetup]);
 
   const planName = useMemo(() => new Map(plans.map(p => [p.id, p.name])), [plans]);
   const countries = useMemo(
@@ -86,12 +96,12 @@ function TenantsList() {
     [tenants],
   );
   const visible = useMemo(
-    () => sortTenants(filterTenants(tenants, filters, health ?? undefined), filters.sort),
-    [tenants, filters, health],
+    () => sortTenants(filterTenants(tenants, filters, health ?? undefined, setup ?? undefined), filters.sort),
+    [tenants, filters, health, setup],
   );
   const { sortedCodes: sortedCountries, groups } = groupByCountry(visible);
   const filtered = filtersToParams({ ...filters, sort: DEFAULT_FILTERS.sort }) !== '';
-  const waitingForHealth = filters.health !== 'all' && !health && !healthError;
+  const waitingForHealth = (filters.health !== 'all' && !health && !healthError) || (filters.setup !== 'all' && !setup && !setupError);
 
   const selectCls = 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500';
 
@@ -131,6 +141,11 @@ function TenantsList() {
             <option value="attention">Needs attention</option>
             {(['active', 'quiet', 'declining', 'new', 'suspended'] as const).map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
           </select>
+          <select aria-label="Setup" value={filters.setup} onChange={e => setFilters({ setup: e.target.value as TenantFilters['setup'] })} className={selectCls}>
+            <option value="all">Any setup</option>
+            <option value="incomplete">Setup incomplete</option>
+            <option value="stuck">Stuck (no first sale)</option>
+          </select>
           <select aria-label="Sort" value={filters.sort} onChange={e => setFilters({ sort: e.target.value as TenantFilters['sort'] })} className={selectCls}>
             <option value="name">Name A–Z</option>
             <option value="newest">Newest first</option>
@@ -156,6 +171,13 @@ function TenantsList() {
           </p>
         )}
 
+        {setupError && (
+          <p className="text-xs text-amber-700">
+            Setup progress couldn&apos;t be loaded, so the setup filter and badges are unavailable.{' '}
+            <button onClick={loadSetup} className="font-bold underline">Retry</button>
+          </p>
+        )}
+
         {loading || waitingForHealth ? (
           <div className="text-sm text-slate-500 text-center py-12">Loading...</div>
         ) : loadError ? (
@@ -175,6 +197,7 @@ function TenantsList() {
                 <div className="space-y-1.5">
                   {groups[country].map(t => {
                     const h = health?.[t.id];
+                    const st = setup?.[t.id];
                     return (
                       <Link key={t.id} href={`/tenants/${t.id}`}
                         className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 px-4 py-3 hover:border-indigo-200 transition-colors">
@@ -186,6 +209,12 @@ function TenantsList() {
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {st && !st.complete && (
+                            <span title={st.next ? `Next: ${st.next}` : undefined}
+                              className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${st.stuck ? 'bg-amber-50 text-amber-700' : 'hidden sm:inline bg-slate-100 text-slate-500'}`}>
+                              {st.stuck ? 'Stuck' : 'Setup'} {st.done}/{st.total}
+                            </span>
+                          )}
                           {h?.needsAttention && (
                             <span className="text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Needs attention</span>
                           )}
@@ -209,7 +238,7 @@ function TenantsList() {
       </div>
 
       {showCreate && (
-        <TenantCreateModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); loadHealth(); }} />
+        <TenantCreateModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); loadHealth(); loadSetup(); }} />
       )}
     </>
   );

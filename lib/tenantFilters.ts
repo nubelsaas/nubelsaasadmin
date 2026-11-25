@@ -16,6 +16,7 @@ export type ListTenant = {
 export type StatusFilter = 'all' | 'active' | 'suspended';
 export type HealthFilter = 'all' | HealthStatus | 'attention';
 export type SortKey = 'name' | 'newest' | 'oldest';
+export type SetupFilter = 'all' | 'incomplete' | 'stuck';
 
 export type TenantFilters = {
   search: string;
@@ -23,13 +24,17 @@ export type TenantFilters = {
   status: StatusFilter;
   country: string;     // 'all', 'none' (sin país) o el código ISO
   health: HealthFilter;
+  setup: SetupFilter;
   sort: SortKey;
 };
 
 /** Lo que la lista necesita de la salud de cada salón (lib/tenantHealth.ts). */
 export type HealthSummary = { status: HealthStatus; needsAttention: boolean };
 
-export const DEFAULT_FILTERS: TenantFilters = { search: '', plan: 'all', status: 'all', country: 'all', health: 'all', sort: 'name' };
+/** Lo que la lista necesita del arranque de cada salón (lib/onboardingRules.ts). */
+export type SetupSummary = { complete: boolean; stuck: boolean };
+
+export const DEFAULT_FILTERS: TenantFilters = { search: '', plan: 'all', status: 'all', country: 'all', health: 'all', setup: 'all', sort: 'name' };
 
 /** Minúsculas y sin tildes: "Peluquería" se encuentra con "peluqueria". */
 export function normalize(text: string): string {
@@ -48,6 +53,7 @@ export function filterTenants<T extends ListTenant>(
   tenants: T[],
   f: TenantFilters,
   health?: Record<string, HealthSummary>,
+  setup?: Record<string, SetupSummary>,
 ): T[] {
   return tenants.filter(t => {
     if (!matchesSearch(t, f.search)) return false;
@@ -60,6 +66,11 @@ export function filterTenants<T extends ListTenant>(
       const h = health?.[t.id];
       if (!h) return false;
       if (f.health === 'attention' ? !h.needsAttention : h.status !== f.health) return false;
+    }
+    if (f.setup !== 'all') {
+      const s = setup?.[t.id];
+      if (!s) return false;
+      if (f.setup === 'stuck' ? !s.stuck : s.complete) return false;
     }
     return true;
   });
@@ -84,6 +95,7 @@ export function filtersFromParams(params: { get(name: string): string | null }):
     status: pick(params.get('status'), ['all', 'active', 'suspended'] as const, 'all'),
     country: params.get('country') || 'all',
     health: pick(params.get('health'), ['all', 'active', 'quiet', 'declining', 'new', 'suspended', 'attention'] as const, 'all'),
+    setup: pick(params.get('setup'), ['all', 'incomplete', 'stuck'] as const, 'all'),
     sort: pick(params.get('sort'), ['name', 'newest', 'oldest'] as const, 'name'),
   };
 }
@@ -96,6 +108,7 @@ export function filtersToParams(f: TenantFilters): string {
   if (f.status !== 'all') params.set('status', f.status);
   if (f.country !== 'all') params.set('country', f.country);
   if (f.health !== 'all') params.set('health', f.health);
+  if (f.setup !== 'all') params.set('setup', f.setup);
   if (f.sort !== 'name') params.set('sort', f.sort);
   return params.toString();
 }

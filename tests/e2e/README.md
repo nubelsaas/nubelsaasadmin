@@ -13,6 +13,7 @@ No corren en CI ni con `npm test` (solo toma `tests/*.test.mjs`).
 | `impersonate-e2e.mjs` | Sesión de soporte marcada en `audit_log` (`impersonated_by`), tope de 60 minutos, lista de sesiones activas y End (espera 65 s). Necesita `audit_impersonation.sql` de nubelsaas en DEV | Sí |
 | `quickwins-e2e.mjs` | Lista de tenants (búsqueda, filtros, orden, URL), salud por salón, plan en Flags y diálogo de motivos. Usa Playwright con un navegador real | Sí |
 | `integrations-e2e.mjs` | Tarjeta de integraciones: un salón con una falla conocida en email, WhatsApp, Google y push; que no salgan tokens. Usa Playwright | Sí |
+| `onboarding-e2e.mjs` | Checklist Setup: un salón nuevo, uno atascado y uno completo; filtros e insignias de la lista. Usa Playwright | Sí |
 
 ```bash
 npm run dev    # en otra terminal: portal DEV en http://localhost:3003
@@ -26,6 +27,7 @@ node --env-file=.env.dev.local tests/e2e/impersonate-e2e.mjs
 # (p. ej. el repo nubelsaas). CHROMIUM_PATH solo si Playwright pide un Chromium que no está descargado.
 PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/quickwins-e2e.mjs
 PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/integrations-e2e.mjs
+PLAYWRIGHT_DIR=~/nubelsaas node --env-file=.env.dev.local tests/e2e/onboarding-e2e.mjs
 ```
 
 `alias-loader.mjs` resuelve `@/…` e imports `.ts` sin extensión como lo hace Next; solo lo necesita `health-e2e.mjs`.

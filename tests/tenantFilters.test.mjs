@@ -62,6 +62,13 @@ test('health filter uses the summary, and hides salons whose health is not loade
   assert.deepEqual(ids(filterTenants(tenants, f({ health: 'active' }))), []);
 });
 
+test('setup filter: incomplete and stuck, hidden while not loaded', () => {
+  const setup = { a: { complete: true, stuck: false }, b: { complete: false, stuck: false }, c: { complete: false, stuck: true } };
+  assert.deepEqual(ids(filterTenants(tenants, f({ setup: 'incomplete' }), undefined, setup)), ['b', 'c']);
+  assert.deepEqual(ids(filterTenants(tenants, f({ setup: 'stuck' }), undefined, setup)), ['c']);
+  assert.deepEqual(ids(filterTenants(tenants, f({ setup: 'stuck' }))), []);
+});
+
 test('filters combine', () => {
   assert.deepEqual(ids(filterTenants(tenants, f({ country: 'CO', status: 'active' }))), ['a']);
 });
@@ -79,15 +86,16 @@ test('sorting does not change the input', () => {
 });
 
 test('URL round trip keeps only non-default values', () => {
-  const filters = f({ search: 'ana', status: 'suspended', sort: 'newest' });
+  const filters = f({ search: 'ana', status: 'suspended', setup: 'stuck', sort: 'newest' });
   const query = filtersToParams(filters);
-  assert.equal(query, 'q=ana&status=suspended&sort=newest');
+  assert.equal(query, 'q=ana&status=suspended&setup=stuck&sort=newest');
   assert.deepEqual(filtersFromParams(new URLSearchParams(query)), filters);
   assert.equal(filtersToParams(DEFAULT_FILTERS), '');
 });
 
 test('unknown URL values fall back to the default', () => {
-  const parsed = filtersFromParams(new URLSearchParams('status=deleted&sort=random&health=great'));
+  const parsed = filtersFromParams(new URLSearchParams('status=deleted&sort=random&health=great&setup=x'));
+  assert.equal(parsed.setup, 'all');
   assert.equal(parsed.status, 'all');
   assert.equal(parsed.sort, 'name');
   assert.equal(parsed.health, 'all');

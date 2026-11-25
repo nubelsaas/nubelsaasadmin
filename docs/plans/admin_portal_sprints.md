@@ -97,6 +97,7 @@
 - [x] Flags: sección del plan, con las funciones que aún no tienen efecto marcadas
 - [x] Sesiones de soporte: tope de 60 minutos, lista de activas y End
 - [x] Integraciones por salón (email, WhatsApp, Google Calendar, push) en el detalle
+- [x] Checklist de arranque (Setup) por salón, con filtros Setup incomplete / Stuck en la lista
 
 ---
 
