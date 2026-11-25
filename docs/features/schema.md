@@ -38,6 +38,7 @@ node scripts/schema-diff.mjs --save both.json        # además guarda los dos sn
 
 - Una diferencia no siempre es un error: `develop` puede haber retirado algo a propósito (p. ej. `whatsapp_sessions`). La lista dice qué difiere; decidir qué hacer es aparte.
 - Un cambio de espacios en el cuerpo de una función cuenta como "body differs".
+- Si una de las dos bases no tiene `admin_schema_snapshot()`, las funciones de extensiones (`show_trgm`, `unaccent`…) aparecen como "solo de ese lado": el catálogo las omite y la API las lista. Instalar la función en las dos bases.
 - No compara datos, grants, cron jobs ni la tabla de migraciones (los SQL se corren a mano en el editor y no quedan registrados ahí).
 
 ## Pruebas

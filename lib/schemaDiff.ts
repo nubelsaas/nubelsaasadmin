@@ -99,11 +99,13 @@ export function diffSnapshots(here: SchemaSnapshot, there: SchemaSnapshot): Diff
     out.push(...compareBy('extension', Object.keys(here.extensions), Object.keys(there.extensions), e => e, (e) =>
       here.extensions[e] !== there.extensions[e] ? `version ${here.extensions[e]} vs ${there.extensions[e]}` : null));
   } else {
-    // Sin catálogo solo se saben los nombres de las funciones que publica la API: las de trigger
-    // nunca aparecen ahí, así que del lado del catálogo no se cuentan.
-    const names = (s: SchemaSnapshot) => Array.from(new Set(
-      s.functions.filter(f => s.source === 'api' || !/^(event_)?trigger$/.test(f.returns)).map(f => f.name),
-    ));
+    // Sin catálogo solo se saben los nombres de las funciones que publica la API. Las de trigger
+    // no se cuentan de ningún lado: la API no las publica (o no siempre).
+    // Las de extensiones (show_trgm, unaccent…) tampoco se distinguen: el catálogo las omite y
+    // la API las lista. Con la función instalada en las dos bases desaparece el ruido.
+    const isTrigger = (f: FunctionDef) => /^(event_)?trigger$/.test(f.returns);
+    const triggerNames = new Set([...here.functions, ...there.functions].filter(isTrigger).map(f => f.name));
+    const names = (s: SchemaSnapshot) => Array.from(new Set(s.functions.map(f => f.name).filter(n => !triggerNames.has(n))));
     out.push(...compareBy('function', names(here), names(there), f => f, () => null));
   }
   return out;
