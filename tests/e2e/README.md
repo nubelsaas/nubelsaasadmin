@@ -20,6 +20,7 @@ No corren en CI ni con `npm test` (solo toma `tests/*.test.mjs`).
 | `mfa-recovery-e2e.mjs` | Recuperación de MFA con `scripts/reset-mfa.mjs`: QR nuevo en `/mfa` y el autenticador perdido ya no sirve. Usa Playwright | Sí |
 | `notes-e2e.mjs` | Notas internas: crear, fijar, editar, borrar, permisos entre dos admins, registro en el audit log y que no bloquean borrar el salón. Usa Playwright. Necesita `20261125_admin_tenant_notes.sql` en DEV | Sí |
 | `onboarding-e2e.mjs` | Checklist Setup: un salón nuevo, uno atascado y uno completo; filtros e insignias de la lista. Usa Playwright | Sí |
+| `hints-e2e.mjs` | Descripciones al pasar el mouse en Tenants: hover, teclado, toque en ⓘ en un teléfono, que no se salgan de la ventana ni tapen el campo, y que se cierren al escribir. Usa Playwright | Sí |
 
 ```bash
 npm run dev    # en otra terminal: portal DEV en http://localhost:3003

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import Hint from '@/components/ui/Hint';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, UserPlus, ShieldCheck, ChevronDown, ChevronUp, Mail, Link2, Copy, Check, Crown, UserCheck, UserX } from 'lucide-react';
 import AdminHeader from '@/components/layout/AdminHeader';
@@ -246,14 +247,14 @@ export default function TenantUsersPage() {
             <p className="text-sm font-black text-slate-700 flex items-center gap-2">
               <ShieldCheck size={16} className="text-indigo-500" /> New admin user
             </p>
-            <div className="flex rounded-xl border border-slate-200 overflow-hidden text-sm">
+            <Hint id="users.addMode" className="flex rounded-xl border border-slate-200 overflow-hidden text-sm">
               {(['invite', 'manual'] as const).map(m => (
                 <button key={m} type="button" onClick={() => { setMode(m); setFormError(null); }}
                   className={`flex-1 py-2 font-medium transition-colors ${mode === m ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
                   {m === 'invite' ? 'Send invite' : 'Create manually'}
                 </button>
               ))}
-            </div>
+            </Hint>
             <p className="text-xs text-slate-400">
               {mode === 'invite' ? 'The admin will receive an email to set their own password.' : 'Set a password directly. No email will be sent.'}
             </p>
@@ -323,19 +324,25 @@ export default function TenantUsersPage() {
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {u.roles && (
+<Hint id="users.role" inline>
                         <span className="text-[11px] font-medium bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">
                           {u.roles.name}
                         </span>
+                        </Hint>
                       )}
                       {isAdmin && (
+<Hint id="users.admin" inline>
                         <span className="text-[11px] font-black bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5">
                           Admin
                         </span>
+                        </Hint>
                       )}
                       {!u.is_active && (
+<Hint id="users.inactive" inline>
                         <span className="text-[11px] font-medium bg-slate-100 text-slate-400 rounded-full px-2 py-0.5">
                           Inactive
                         </span>
+                        </Hint>
                       )}
                       {/* Expand toggle */}
                       <button
@@ -356,35 +363,35 @@ export default function TenantUsersPage() {
                       {/* Action buttons */}
                       {(!ua || ua.status === 'idle' || ua.status === 'error') && (
                         <div className="flex gap-2 flex-wrap">
-                          <button
+                          <Hint id="users.resendInvite" inline className="flex"><button
                             onClick={() => handleResendInvite(u.id)}
                             className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
                             <Mail size={13} /> Resend invite
-                          </button>
-                          <button
+                          </button></Hint>
+                          <Hint id="users.magicLink" inline className="flex"><button
                             onClick={() => handleMagicLink(u.id)}
                             className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
                             <Link2 size={13} /> Generate magic link
-                          </button>
+                          </button></Hint>
                           {u.is_active && !isAdmin && (
-                            <button
+                            <Hint id="users.makeOwner" inline className="flex"><button
                               onClick={() => handleAccess(u, 'make_owner', { title: `Make ${u.email} an owner?`, message: 'They get full access to this salon.', confirmLabel: 'Make owner' })}
                               className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50 transition-colors">
                               <Crown size={13} /> Make owner
-                            </button>
+                            </button></Hint>
                           )}
                           {u.is_active ? (
-                            <button
+                            <Hint id="users.deactivate" inline className="flex"><button
                               onClick={() => handleAccess(u, 'deactivate', { title: `Deactivate ${u.email}?`, message: "They can't log in afterwards. Their sales and appointments stay.", confirmLabel: 'Deactivate', tone: 'danger' })}
                               className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-rose-200 bg-white text-rose-600 px-3 py-2 hover:bg-rose-50 transition-colors">
                               <UserX size={13} /> Deactivate
-                            </button>
+                            </button></Hint>
                           ) : (
-                            <button
+                            <Hint id="users.reactivate" inline className="flex"><button
                               onClick={() => handleAccess(u, 'reactivate', { title: `Reactivate ${u.email}?`, message: 'They can log in again.', confirmLabel: 'Reactivate' })}
                               className="flex items-center gap-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50 transition-colors">
                               <UserCheck size={13} /> Reactivate
-                            </button>
+                            </button></Hint>
                           )}
                         </div>
                       )}

@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import Hint, { HintIcon } from '@/components/ui/Hint';
 import { Building2, Headset, History, Megaphone, RefreshCw, StickyNote, Wrench } from 'lucide-react';
 import type { TimelineItem, TimelineKind } from '@/lib/timeline';
 
@@ -52,9 +53,11 @@ export default function TimelineCard({ tenantId }: { tenantId: string }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
-        <p className="flex-1 flex items-center gap-2 text-[11px] font-black text-slate-400 uppercase tracking-wider">
-          <History size={13} /> Timeline
-        </p>
+        <Hint id="card.timeline" className="flex-1">
+          <p className="flex items-center gap-2 text-[11px] font-black text-slate-400 uppercase tracking-wider">
+            <History size={13} /> Timeline <HintIcon />
+          </p>
+        </Hint>
         <button onClick={load} disabled={loading} className="text-slate-400 hover:text-slate-600 disabled:opacity-50" aria-label="Refresh timeline">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </button>

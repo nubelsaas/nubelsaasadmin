@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import Hint, { HintIcon } from '@/components/ui/Hint';
 import { X, Upload, ImageIcon } from 'lucide-react';
 import { COUNTRY_OPTIONS, COUNTRIES } from '@/lib/countries';
 
@@ -116,78 +117,78 @@ export default function TenantCreateModal({ onClose, onCreated }: Props) {
           {/* Identity */}
           <section className="space-y-3">
             <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Identity</p>
-            <div>
-              <label className={labelCls}>Business name <span className="text-rose-500">*</span></label>
+            <Hint id="create.name">
+              <label className={labelCls}>Business name <span className="text-rose-500">*</span> <HintIcon /></label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} required autoFocus
                 className={inputCls} placeholder="Salón Ejemplo" />
-            </div>
+            </Hint>
           </section>
 
           {/* Location */}
           <section className="space-y-3">
             <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Location</p>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Country <span className="text-rose-500">*</span></label>
+              <Hint id="create.country">
+                <label className={labelCls}>Country <span className="text-rose-500">*</span> <HintIcon /></label>
                 <select value={countryIso} onChange={e => handleCountryChange(e.target.value)} required className={inputCls}>
                   {COUNTRY_OPTIONS.map(c => (
                     <option key={c.iso} value={c.iso}>{c.flag} {c.name}</option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label className={labelCls}>City</label>
+              </Hint>
+              <Hint id="create.city">
+                <label className={labelCls}>City <HintIcon /></label>
                 <input type="text" value={city} onChange={e => setCity(e.target.value)}
                   className={inputCls} placeholder="Bogotá" />
-              </div>
+              </Hint>
             </div>
           </section>
 
           {/* Contact */}
           <section className="space-y-3">
             <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Contact</p>
-            <div>
-              <label className={labelCls}>Admin email <span className="text-rose-500">*</span></label>
+            <Hint id="create.adminEmail">
+              <label className={labelCls}>Admin email <span className="text-rose-500">*</span> <HintIcon /></label>
               <input type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} required
                 className={inputCls} placeholder="admin@ejemplo.com" />
               <p className="mt-1 text-[10px] text-slate-400">Cada tenant debe nacer con su Súper Administrador. Se le enviará una invitación para configurar su acceso.</p>
-            </div>
-            <div>
-              <label className={labelCls}>Admin name</label>
+            </Hint>
+            <Hint id="create.adminName">
+              <label className={labelCls}>Admin name <HintIcon /></label>
               <input type="text" value={adminName} onChange={e => setAdminName(e.target.value)}
                 className={inputCls} placeholder="Juan Pérez" />
-            </div>
-            <div>
-              <label className={labelCls}>Phone</label>
+            </Hint>
+            <Hint id="create.phone">
+              <label className={labelCls}>Phone <HintIcon /></label>
               <div className="flex gap-2">
                 <input type="text" value={phonePrefix} onChange={e => setPhonePrefix(e.target.value)}
                   className={`${inputCls} w-20 text-center`} />
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
                   className={`${inputCls} flex-1`} placeholder="3001234567" />
               </div>
-            </div>
+            </Hint>
           </section>
 
           {/* Configuration */}
           <section className="space-y-3">
             <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Configuration</p>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Currency</label>
+              <Hint id="settings.currency">
+                <label className={labelCls}>Currency <HintIcon /></label>
                 <input type="text" value={currency} onChange={e => setCurrency(e.target.value)}
                   className={inputCls} placeholder="COP" maxLength={3} />
-              </div>
-              <div>
-                <label className={labelCls}>Timezone</label>
+              </Hint>
+              <Hint id="settings.timezone">
+                <label className={labelCls}>Timezone <HintIcon /></label>
                 <input type="text" value={timezone} onChange={e => setTimezone(e.target.value)}
                   className={inputCls} placeholder="America/Bogota" />
-              </div>
+              </Hint>
             </div>
           </section>
 
           {/* Plan */}
           <section className="space-y-3">
-            <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Plan</p>
+            <Hint id="create.plan"><p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Plan <HintIcon /></p></Hint>
             <select value={planId} onChange={e => setPlanId(e.target.value)} required className={inputCls}>
               {plans.length === 0 && <option value="">Loading plans…</option>}
               {plans.map(p => (
@@ -200,7 +201,7 @@ export default function TenantCreateModal({ onClose, onCreated }: Props) {
 
           {/* Logo */}
           <section className="space-y-3">
-            <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Logo</p>
+            <Hint id="settings.logo"><p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Logo <HintIcon /></p></Hint>
             <div
               onClick={() => fileRef.current?.click()}
               className="flex items-center gap-4 border-2 border-dashed border-slate-200 rounded-2xl p-4 cursor-pointer hover:border-indigo-300 transition-colors">

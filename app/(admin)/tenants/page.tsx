@@ -5,6 +5,9 @@ import { Plus, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import AdminHeader from '@/components/layout/AdminHeader';
 import TenantCreateModal from '@/components/tenants/TenantCreateModal';
+import Hint from '@/components/ui/Hint';
+import type { HelpKey } from '@/lib/fieldHelp';
+import type { HealthStatus } from '@/lib/healthStatus';
 import { countryLabel, groupByCountry } from '@/lib/countries';
 import { STATUS_LABEL, STATUS_STYLE } from '@/lib/healthStatus';
 import {
@@ -14,6 +17,10 @@ import {
 import type { OnboardingBrief } from '@/app/api/tenants/onboarding/route';
 
 type Plan = { id: string; name: string };
+
+const HEALTH_HINT: Record<HealthStatus, HelpKey> = {
+  active: 'health.active', quiet: 'health.quiet', declining: 'health.declining', new: 'health.new', suspended: 'health.suspended',
+};
 
 export default function TenantsPage() {
   // useSearchParams necesita un Suspense en una página cliente.
@@ -110,47 +117,61 @@ function TenantsList() {
       <AdminHeader title="Tenants" />
       <div className="p-4 md:p-8 space-y-5">
         <div className="flex gap-3">
-          <div className="relative flex-1">
+          <Hint id="list.search" className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="text" placeholder="Search by name or contact email..." value={searchText} onChange={e => setSearchText(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white" />
-          </div>
-          <button onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 rounded-full bg-indigo-600 text-white font-black px-4 py-2.5 text-sm">
-            <Plus size={16} /><span className="hidden sm:inline">New</span>
-          </button>
+          </Hint>
+          <Hint id="list.new" inline className="flex">
+            <button onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 rounded-full bg-indigo-600 text-white font-black px-4 py-2.5 text-sm">
+              <Plus size={16} /><span className="hidden sm:inline">New</span>
+            </button>
+          </Hint>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Hint id="list.plan" inline>
           <select aria-label="Plan" value={filters.plan} onChange={e => setFilters({ plan: e.target.value })} className={selectCls}>
             <option value="all">All plans</option>
             {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             <option value="none">No plan</option>
           </select>
+          </Hint>
+          <Hint id="list.status" inline>
           <select aria-label="Status" value={filters.status} onChange={e => setFilters({ status: e.target.value as TenantFilters['status'] })} className={selectCls}>
             <option value="all">Active and suspended</option>
             <option value="active">Active only</option>
             <option value="suspended">Suspended only</option>
           </select>
+          </Hint>
+          <Hint id="list.country" inline>
           <select aria-label="Country" value={filters.country} onChange={e => setFilters({ country: e.target.value })} className={selectCls}>
             <option value="all">All countries</option>
             {countries.map(c => <option key={c} value={c}>{c === 'none' ? 'No country' : countryLabel(c)}</option>)}
           </select>
+          </Hint>
+          <Hint id="list.health" inline>
           <select aria-label="Health" value={filters.health} onChange={e => setFilters({ health: e.target.value as TenantFilters['health'] })} className={selectCls}>
             <option value="all">Any health</option>
             <option value="attention">Needs attention</option>
             {(['active', 'quiet', 'declining', 'new', 'suspended'] as const).map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
           </select>
+          </Hint>
+          <Hint id="list.setup" inline>
           <select aria-label="Setup" value={filters.setup} onChange={e => setFilters({ setup: e.target.value as TenantFilters['setup'] })} className={selectCls}>
             <option value="all">Any setup</option>
             <option value="incomplete">Setup incomplete</option>
             <option value="stuck">Stuck (no first sale)</option>
           </select>
+          </Hint>
+          <Hint id="list.sort" inline>
           <select aria-label="Sort" value={filters.sort} onChange={e => setFilters({ sort: e.target.value as TenantFilters['sort'] })} className={selectCls}>
             <option value="name">Name A–Z</option>
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
           </select>
+          </Hint>
           {filtered && (
             <button onClick={() => { setSearchText(''); setFilters({ ...DEFAULT_FILTERS, sort: filters.sort }); }}
               className="flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-800 px-2 py-2">
@@ -210,18 +231,26 @@ function TenantsList() {
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {st && !st.complete && (
-                            <span title={st.next ? `Next: ${st.next}` : undefined}
-                              className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${st.stuck ? 'bg-amber-50 text-amber-700' : 'hidden sm:inline bg-slate-100 text-slate-500'}`}>
-                              {st.stuck ? 'Stuck' : 'Setup'} {st.done}/{st.total}
-                            </span>
+                            <Hint id={st.stuck ? 'badge.stuck' : 'badge.setup'} inline className={st.stuck ? '' : 'hidden sm:inline'}
+                              extra={st.next ? `Next step: ${st.next}.` : undefined}>
+                              <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${st.stuck ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                                {st.stuck ? 'Stuck' : 'Setup'} {st.done}/{st.total}
+                              </span>
+                            </Hint>
                           )}
                           {h?.needsAttention && (
-                            <span className="text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Needs attention</span>
+                            <Hint id="badge.attention" inline>
+                              <span className="text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Needs attention</span>
+                            </Hint>
                           )}
                           {h ? (
-                            <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${STATUS_STYLE[h.status]}`}>{STATUS_LABEL[h.status]}</span>
+                            <Hint id={HEALTH_HINT[h.status]} inline>
+                              <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${STATUS_STYLE[h.status]}`}>{STATUS_LABEL[h.status]}</span>
+                            </Hint>
                           ) : t.suspended_at ? (
-                            <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${STATUS_STYLE.suspended}`}>{STATUS_LABEL.suspended}</span>
+                            <Hint id="health.suspended" inline>
+                              <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${STATUS_STYLE.suspended}`}>{STATUS_LABEL.suspended}</span>
+                            </Hint>
                           ) : null}
                         </div>
                         <p className="hidden sm:block text-xs text-slate-400 flex-shrink-0 w-16 text-right">

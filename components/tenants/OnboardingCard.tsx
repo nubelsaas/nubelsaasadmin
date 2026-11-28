@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import Hint, { HintIcon } from '@/components/ui/Hint';
 import { CheckCircle2, ChevronDown, ChevronUp, Circle, RefreshCw } from 'lucide-react';
 import type { OnboardingSummary } from '@/lib/onboardingRules';
 
@@ -40,17 +41,18 @@ export default function OnboardingCard({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200">
-      <div className="flex items-center gap-2 px-5 py-3">
+      <Hint id="card.setup" className="flex items-center gap-2 px-5 py-3">
         <button type="button" onClick={() => setOpen(o => !o)} disabled={!summary}
           className="flex-1 flex items-center gap-2 text-left" aria-expanded={Boolean(open)}>
           <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Setup</span>
           {badge && <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${badge.cls}`}>{badge.text}</span>}
           {summary && (open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />)}
         </button>
+        <HintIcon />
         <button onClick={load} disabled={loading} className="text-slate-400 hover:text-slate-600 disabled:opacity-50" aria-label="Refresh setup progress">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </button>
-      </div>
+      </Hint>
 
       {error ? (
         <p className="px-5 pb-4 text-sm text-rose-600">{error}</p>

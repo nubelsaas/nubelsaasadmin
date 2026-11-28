@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import Hint, { HintIcon } from '@/components/ui/Hint';
 import { Bell, CalendarDays, ChevronDown, ChevronUp, Mail, MessageCircle, RefreshCw } from 'lucide-react';
 import type { IntegrationReport } from '@/lib/integrationHealth';
 import type { IntegrationKey, Level } from '@/lib/integrationRules';
@@ -49,8 +50,14 @@ export default function IntegrationsCard({ tenantId }: { tenantId: string }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
-        <p className="flex-1 text-[11px] font-black text-slate-400 uppercase tracking-wider">Integrations</p>
-        {report && <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${LEVEL_STYLE[report.level]}`}>{LEVEL_LABEL[report.level]}</span>}
+        <Hint id="card.integrations" className="flex-1">
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Integrations <HintIcon /></p>
+        </Hint>
+        {report && (
+          <Hint id="integration.level" inline>
+            <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${LEVEL_STYLE[report.level]}`}>{LEVEL_LABEL[report.level]}</span>
+          </Hint>
+        )}
         <button onClick={load} disabled={loading} className="text-slate-400 hover:text-slate-600 disabled:opacity-50" aria-label="Refresh integrations">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </button>
@@ -76,7 +83,9 @@ export default function IntegrationsCard({ tenantId }: { tenantId: string }) {
                     <p className="text-sm font-medium text-slate-800">{i.label}</p>
                     <p className="text-xs text-slate-500">{i.summary}</p>
                   </div>
-                  <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 flex-shrink-0 ${LEVEL_STYLE[i.level]}`}>{LEVEL_LABEL[i.level]}</span>
+                  <Hint id="integration.level" inline className="flex-shrink-0">
+                    <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${LEVEL_STYLE[i.level]}`}>{LEVEL_LABEL[i.level]}</span>
+                  </Hint>
                   {hasMore && (expanded ? <ChevronUp size={14} className="text-slate-400 mt-0.5" /> : <ChevronDown size={14} className="text-slate-400 mt-0.5" />)}
                 </button>
                 {expanded && (

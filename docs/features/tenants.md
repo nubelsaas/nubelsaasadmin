@@ -12,6 +12,29 @@ Gestión completa de tenants: listado con búsqueda, creación de nuevos tenants
 
 ---
 
+## Descripciones al pasar el mouse
+
+Cada etiqueta, campo, insignia y botón de las pantallas de Tenants (lista, detalle, tarjetas, modal de
+creación y usuarios) explica qué es y qué hace.
+
+- **Textos:** todos en `lib/fieldHelp.ts`, uno por clave (`settings.country`, `badge.stuck`…). Salen de
+  lo que hace el código, no de la etiqueta: si cambia una regla (p. ej. los 14 días de "Quiet"), cambiar
+  también el texto. `tests/fieldHelp.test.mjs` falla si un texto queda sin usar o pasa de 200 caracteres;
+  TypeScript rechaza una clave que no exista.
+- **Componente:** `components/ui/Hint.tsx`. `<Hint id="…">` envuelve la etiqueta y su campo (`inline`
+  para badges y botones); `<HintIcon />` va junto a la etiqueta. `extra` agrega un dato de la fila (el
+  próximo paso en la insignia Setup).
+- **Comportamiento:**
+  - Mouse: aparece a los 400 ms sobre la etiqueta o el campo.
+  - Teclado: aparece al entrar con Tab al campo; no al hacer clic.
+  - Táctil: no hay hover; se toca el ícono ⓘ, y se cierra tocándolo otra vez o tocando fuera.
+  - Se cierra al escribir, al hacer clic dentro, con Escape y al hacer scroll. Una sola abierta a la vez.
+  - Se dibuja fuera de la tarjeta (portal, posición fija), arriba de lo envuelto para no tapar el campo, y
+    abajo si no cabe. Nunca se sale de la ventana.
+- El ícono ⓘ no está en el orden de Tab (con teclado ya abre el campo). Para lectores de pantalla se llama
+  "More info" y la descripción va por `aria-describedby`.
+- Prueba: `tests/e2e/hints-e2e.mjs`.
+
 ## Pantalla de listado `/tenants`
 
 ### Funcionalidades

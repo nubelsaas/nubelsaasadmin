@@ -10,6 +10,8 @@ import IntegrationsCard from '@/components/tenants/IntegrationsCard';
 import OnboardingCard from '@/components/tenants/OnboardingCard';
 import NotesCard from '@/components/tenants/NotesCard';
 import TimelineCard from '@/components/tenants/TimelineCard';
+import Hint, { HintIcon } from '@/components/ui/Hint';
+import type { HelpKey } from '@/lib/fieldHelp';
 
 type Tenant = {
   id: string; name: string; admin_email: string | null;
@@ -303,42 +305,44 @@ export default function TenantDetailPage() {
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Link href={`/tenants/${id}/users`}
-              className="bg-white rounded-2xl border border-slate-200 p-4 text-center hover:border-indigo-200 transition-colors">
+            <Hint id="stats.users" className="flex"><Link href={`/tenants/${id}/users`}
+              className="flex-1 bg-white rounded-2xl border border-slate-200 p-4 text-center hover:border-indigo-200 transition-colors">
               <Users size={18} className="mx-auto text-slate-400 mb-1" />
               <p className="text-xl font-black text-slate-900">{stats.activeUsers}</p>
-              <p className="text-[11px] text-slate-400">Users</p>
-            </Link>
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+              <p className="text-[11px] text-slate-400">Users <HintIcon /></p>
+            </Link></Hint>
+            <Hint id="stats.customers" className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
               <UserRound size={18} className="mx-auto text-slate-400 mb-1" />
               <p className="text-xl font-black text-slate-900">{stats.customers}</p>
-              <p className="text-[11px] text-slate-400">Customers</p>
-            </div>
+              <p className="text-[11px] text-slate-400">Customers <HintIcon /></p>
+            </Hint>
             {[
-              { icon: GitBranch,   value: stats.branches, label: 'Branches' },
+              { icon: GitBranch,   value: stats.branches, label: 'Branches', hint: 'stats.branches' as HelpKey },
               { icon: ShoppingBag, value: stats.lastSale
                   ? new Date(stats.lastSale).toLocaleDateString('en', { day: 'numeric', month: 'short' })
-                  : '—', label: 'Last sale' },
-            ].map(({ icon: Icon, value, label }) => (
-              <div key={label} className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+                  : '—', label: 'Last sale', hint: 'stats.lastSale' as HelpKey },
+            ].map(({ icon: Icon, value, label, hint }) => (
+              <Hint key={label} id={hint} className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
                 <Icon size={18} className="mx-auto text-slate-400 mb-1" />
                 <p className="text-xl font-black text-slate-900">{value}</p>
-                <p className="text-[11px] text-slate-400">{label}</p>
-              </div>
+                <p className="text-[11px] text-slate-400">{label} <HintIcon /></p>
+              </Hint>
             ))}
           </div>
         )}
 
         {/* Quick links */}
         <div className="flex gap-2 flex-wrap">
-          <Link href={`/flags?tenant=${id}`}       className="text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">Feature Flags</Link>
-          <Link href={`/impersonate?tenant=${id}`} className="text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">Impersonate</Link>
-          <Link href={`/clone?source=${id}`}       className="text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">Clone</Link>
-          <Link href={`/audit?tenant=${id}`}       className="text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">Audit log</Link>
+          <Hint id="link.flags" inline className="flex"><Link href={`/flags?tenant=${id}`}       className="text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">Feature Flags</Link></Hint>
+          <Hint id="link.impersonate" inline className="flex"><Link href={`/impersonate?tenant=${id}`} className="text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">Impersonate</Link></Hint>
+          <Hint id="link.clone" inline className="flex"><Link href={`/clone?source=${id}`}       className="text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">Clone</Link></Hint>
+          <Hint id="link.audit" inline className="flex"><Link href={`/audit?tenant=${id}`}       className="text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">Audit log</Link></Hint>
+          <Hint id="link.openApp" inline className="flex">
           <a href={process.env.NEXT_PUBLIC_MAIN_APP_URL ?? 'https://app.nubel.tech'} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50">
             <ExternalLink size={12} /> Open app
           </a>
+          </Hint>
         </div>
 
         <NotesCard tenantId={tenant.id} />
@@ -350,10 +354,10 @@ export default function TenantDetailPage() {
         <TimelineCard tenantId={tenant.id} />
 
         {/* Public booking link — the salon's shareable /book portal URL */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <Hint id="card.booking" className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-black text-slate-700 flex items-center gap-2">
-              <CalendarCheck size={15} className="text-slate-400" /> Public booking page
+              <CalendarCheck size={15} className="text-slate-400" /> Public booking page <HintIcon />
             </p>
             {bookingEnabled ? (
               <span className="text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 px-2 py-0.5">Enabled</span>
@@ -391,11 +395,11 @@ export default function TenantDetailPage() {
               El salón aún no habilitó su agenda pública (no hay servicios publicables). El enlace mostrará “Salón no encontrado” hasta que active servicios en el app.
             </p>
           )}
-        </div>
+        </Hint>
 
         {/* Logo */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-          <p className="text-sm font-black text-slate-700">Logo</p>
+          <Hint id="settings.logo"><p className="text-sm font-black text-slate-700">Logo <HintIcon /></p></Hint>
           <div className="flex items-center gap-4">
             {logoUrl ? (
               <div className="relative w-20 h-20 rounded-2xl border border-slate-200 overflow-hidden bg-slate-50 flex-shrink-0">
@@ -433,21 +437,21 @@ export default function TenantDetailPage() {
         {/* Info — read-only */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
           <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Info</p>
-          <div>
-            <p className="text-xs font-medium text-slate-400 mb-1">ID</p>
+          <Hint id="info.id">
+            <p className="text-xs font-medium text-slate-400 mb-1">ID <HintIcon /></p>
             <p className="text-xs font-mono text-slate-400 break-all">{tenant.id}</p>
-          </div>
+          </Hint>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { label: 'Name',    value: tenant.name },
-              { label: 'City',    value: tenant.city    ?? '—' },
-              { label: 'Phone',   value: tenant.phone   ?? '—' },
-              { label: 'Country', value: tenant.country_iso ?? '—' },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <p className="text-xs font-medium text-slate-400 mb-0.5">{label}</p>
+              { label: 'Name',    value: tenant.name,                hint: 'info.name' },
+              { label: 'City',    value: tenant.city    ?? '—',      hint: 'info.city' },
+              { label: 'Phone',   value: tenant.phone   ?? '—',      hint: 'info.phone' },
+              { label: 'Country', value: tenant.country_iso ?? '—',  hint: 'info.country' },
+            ].map(({ label, value, hint }) => (
+              <Hint key={label} id={hint as HelpKey}>
+                <p className="text-xs font-medium text-slate-400 mb-0.5">{label} <HintIcon /></p>
                 <p className="text-sm text-slate-700">{value}</p>
-              </div>
+              </Hint>
             ))}
           </div>
         </div>
@@ -457,15 +461,15 @@ export default function TenantDetailPage() {
           <form onSubmit={handleSave} className="space-y-4">
             <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Platform settings</p>
 
-            <div>
-              <label className={labelCls}>Admin email</label>
+            <Hint id="settings.adminEmail">
+              <label className={labelCls}>Admin email <HintIcon /></label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls}
                 placeholder="admin@empresa.com" />
-            </div>
+            </Hint>
 
             <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={labelCls}>Country (ISO)</label>
+              <Hint id="settings.country">
+                <label className={labelCls}>Country (ISO) <HintIcon /></label>
                 <select value={country} onChange={e => handleCountryChange(e.target.value)} disabled={regionLocked}
                   className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed`}>
                   <option value="CO">🇨🇴 Colombia (CO)</option>
@@ -483,22 +487,22 @@ export default function TenantDetailPage() {
                   <option value="BO">🇧🇴 Bolivia (BO)</option>
                   <option value="PR">🇵🇷 Puerto Rico (PR)</option>
                 </select>
-              </div>
-              <div>
-                <label className={labelCls}>Currency</label>
+              </Hint>
+              <Hint id="settings.currency">
+                <label className={labelCls}>Currency <HintIcon /></label>
                 <input type="text" value={currency} readOnly
                   className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} placeholder="COP" />
-              </div>
-              <div>
-                <label className={labelCls}>Timezone</label>
+              </Hint>
+              <Hint id="settings.timezone">
+                <label className={labelCls}>Timezone <HintIcon /></label>
                 <input type="text" value={timezone} readOnly
                   className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} placeholder="America/Bogota" />
-              </div>
-              <div>
-                <label className={labelCls}>Phone prefix</label>
+              </Hint>
+              <Hint id="settings.phonePrefix">
+                <label className={labelCls}>Phone prefix <HintIcon /></label>
                 <input type="text" value={phonePrefix} readOnly
                   className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} placeholder="+57" />
-              </div>
+              </Hint>
             </div>
 
             {regionLocked && (
@@ -506,9 +510,9 @@ export default function TenantDetailPage() {
             )}
 
             {/* Plan */}
-            <div className="pt-2 border-t border-slate-100">
+            <Hint id="settings.plan" className="pt-2 border-t border-slate-100">
               <label className={labelCls}>
-                <span className="flex items-center gap-2"><CreditCard size={14} className="text-slate-400" /> Subscription plan</span>
+                <span className="flex items-center gap-2"><CreditCard size={14} className="text-slate-400" /> Subscription plan <HintIcon /></span>
               </label>
               <select value={planId} onChange={e => setPlanId(e.target.value)} className={inputCls}>
                 <option value="">— No plan assigned —</option>
@@ -524,7 +528,7 @@ export default function TenantDetailPage() {
                   {' · '}${currentPlan.monthly_price.toLocaleString()}/mo
                 </p>
               )}
-            </div>
+            </Hint>
 
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <button type="submit" disabled={saving}
@@ -542,10 +546,10 @@ export default function TenantDetailPage() {
         {/* Export */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-2">
           <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-black text-slate-700 flex items-center gap-2"><Download size={15} className="text-slate-400" /> Export data</p>
+            <Hint id="action.export">
+              <p className="text-sm font-black text-slate-700 flex items-center gap-2"><Download size={15} className="text-slate-400" /> Export data <HintIcon /></p>
               <p className="text-xs text-slate-400 mt-0.5">Downloads a ZIP of CSV files with the salon&apos;s records. It has personal data: never send it as an email attachment.</p>
-            </div>
+            </Hint>
             <button
               type="button"
               onClick={handleExport}
@@ -561,9 +565,9 @@ export default function TenantDetailPage() {
         {/* Suspension */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-2">
           <div className="flex items-center justify-between gap-4">
-            <div>
+            <Hint id="action.suspend">
               <p className="text-sm font-black text-slate-700 flex items-center gap-2">
-                <Ban size={15} className="text-slate-400" /> Suspension
+                <Ban size={15} className="text-slate-400" /> Suspension <HintIcon />
                 {tenant.suspended_at && <span className="text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Suspended</span>}
               </p>
               <p className="text-xs text-slate-400 mt-0.5">
@@ -571,7 +575,7 @@ export default function TenantDetailPage() {
                   ? `Read-only since ${new Date(tenant.suspended_at).toLocaleDateString('en', { dateStyle: 'long' })}. The reason is in the audit log.`
                   : 'Makes the salon read-only and stops public booking, WhatsApp and reminders. Support chat stays on.'}
               </p>
-            </div>
+            </Hint>
             <button
               type="button"
               onClick={handleSuspensionToggle}
@@ -586,10 +590,10 @@ export default function TenantDetailPage() {
 
         {/* Clone template */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-black text-slate-700 flex items-center gap-2"><CopyIcon size={15} className="text-slate-400" /> Clone template</p>
+          <Hint id="action.template">
+            <p className="text-sm font-black text-slate-700 flex items-center gap-2"><CopyIcon size={15} className="text-slate-400" /> Clone template <HintIcon /></p>
             <p className="text-xs text-slate-400 mt-0.5">Only templates can be a clone source. Its catalog, costs and suppliers get copied, so never use a real salon.</p>
-          </div>
+          </Hint>
           <button
             type="button"
             onClick={handleTemplateToggle}
@@ -602,10 +606,10 @@ export default function TenantDetailPage() {
 
         {/* Danger zone */}
         <div className="bg-white rounded-2xl border border-rose-200 p-5 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-black text-slate-700">Delete tenant</p>
+          <Hint id="action.delete">
+            <p className="text-sm font-black text-slate-700">Delete tenant <HintIcon /></p>
             <p className="text-xs text-slate-400 mt-0.5">Only for empty tenants. Removes the tenant and its logins permanently.</p>
-          </div>
+          </Hint>
           <button
             type="button"
             onClick={() => setShowDelete(true)}

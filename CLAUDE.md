@@ -110,6 +110,7 @@ Rutas ya creadas:
 - **Layout de página:** `AdminHeader` + contenido con `p-4 md:p-8`.
 - **Cards/secciones:** `bg-white rounded-2xl border border-slate-200`.
 - **Botón primario:** `rounded-full bg-indigo-600 text-white font-black`.
+- **Descripciones de campos:** `<Hint id>` + `<HintIcon />` (`components/ui/Hint.tsx`), textos en `lib/fieldHelp.ts`. No usar el atributo `title` para explicar un campo.
 
 ## Variables de entorno
 | Variable | Uso |

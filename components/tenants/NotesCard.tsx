@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import Hint, { HintIcon } from '@/components/ui/Hint';
 import { Pencil, Pin, PinOff, RefreshCw, StickyNote, Trash2 } from 'lucide-react';
 import { NOTE_MAX, canChangeNote, wasEdited, type TenantNote } from '@/lib/tenantNotes';
 
@@ -69,10 +70,12 @@ export default function NotesCard({ tenantId }: { tenantId: string }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
-        <p className="flex-1 flex items-center gap-2 text-[11px] font-black text-slate-400 uppercase tracking-wider">
-          <StickyNote size={13} /> Internal notes
-          {notes && notes.length > 0 && <span className="text-[10px] font-bold rounded-full px-2 py-0.5 bg-slate-100 text-slate-500 normal-case tracking-normal">{notes.length}</span>}
-        </p>
+        <Hint id="card.notes" className="flex-1">
+          <p className="flex items-center gap-2 text-[11px] font-black text-slate-400 uppercase tracking-wider">
+            <StickyNote size={13} /> Internal notes <HintIcon />
+            {notes && notes.length > 0 && <span className="text-[10px] font-bold rounded-full px-2 py-0.5 bg-slate-100 text-slate-500 normal-case tracking-normal">{notes.length}</span>}
+          </p>
+        </Hint>
         <button onClick={load} disabled={loading} className="text-slate-400 hover:text-slate-600 disabled:opacity-50" aria-label="Refresh notes">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </button>
